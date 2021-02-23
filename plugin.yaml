@@ -1,0 +1,47 @@
+name: "optimize"
+version: "1.0.0"
+usage: "optimize resource spec of running containers during an upgrade"
+description: |-
+  This plugin injects optimal resource specificatons into Helm value files during an app 
+  installation or upgrade.  This is done through the ability to encode these specs for 
+  cpu/memory after extraction from your preferred parameter repository.
+
+  Usage:
+  1) Update Value Files
+      Replace your existing resource specification in your value files with '"{{optimize_resources}}"'.
+      Eg. Here we have a standard resource spec defined in a value file.
+          resources: 
+            limits:
+              cpu: 250m
+              memory: 1024Mi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          Replace the above specification with,
+          resources: "{{optimize_resources}}"
+      A best practice is to implement this change outside of the default value file.  If you
+      only have a default value file, simply copy that file and replace the name.  Ensure you
+      pipe in that value file explicility using -f or --values
+
+  2) Configure plugin
+      Currently there is support for two repositories; 1) Densify 2) SSM Parameter Store.  You can
+      access the configuration wizard by issuing the command 'helm optimize -configure'.  The 
+      configuration is stored as a k8s secret called 'densify-secrets' and will be referenced
+      each time the plugin is invoked.
+
+  3 Optimize your Application
+    Simply use helm as you normally would, but add the 'optimize' keyword before any command.
+    The plugin will lookup the optimal resource spec from the configured repository.
+
+    In an install scenario,
+      - if the repository does not return optimal settings, then no resources are configured for the
+        kubernetes object.
+    In an upgrade scenario,
+      - if the repository does not return optimal settings, then no changes are made to the resource
+        spec of the kubernetes object.
+    
+    Eg: helm optimize (install/upgrade) chart chart_dir/ --values value-file1.yaml -f value-file2.yaml
+
+ignoreFlags: false
+command: "go run $HELM_PLUGIN_DIR/main.go"
+#useTunnel: true
