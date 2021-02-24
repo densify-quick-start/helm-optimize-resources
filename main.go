@@ -20,7 +20,7 @@ var adapter string
 
 func printHowToUse() error {
 
-	content, err := ioutil.ReadFile(os.Getenv("HELM_PLUGINS") + "/densify-lookup/plugin.yaml")
+	content, err := ioutil.ReadFile(os.Getenv("HELM_PLUGIN_DIR") + "/plugin.yaml")
 	support.CheckErr("", err)
 
 	var pluginYAML map[string]interface{}
