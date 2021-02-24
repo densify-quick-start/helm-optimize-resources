@@ -10,8 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	densify "./adapters"
-	support "./adapters/support"
+	densify "./densify"
+	ssm "./ssm"
+	support "./support"
 	"github.com/ghodss/yaml"
 )
 
@@ -35,13 +36,15 @@ func printHowToUse() error {
 
 }
 
-func initializeAdapter() {
+func initializeAdapter(create bool) {
 
 	var err error
 
 	switch adapter {
 	case "densify":
-		err = densify.Initialize()
+		err = densify.Initialize(create)
+	case "ssm":
+		err = ssm.Initialize(create)
 	}
 
 	if err != nil {
@@ -58,6 +61,8 @@ func getInsight(cluster string, namespace string, objType string, objName string
 	switch adapter {
 	case "densify":
 		insight, err = densify.GetInsight(cluster, namespace, objType, objName, containerName)
+	case "ssm":
+		insight, err = ssm.GetInsight(cluster, namespace, objType, objName, containerName)
 	}
 
 	if err != nil {
@@ -65,26 +70,6 @@ func getInsight(cluster string, namespace string, objType string, objName string
 	}
 
 	return insight, nil
-
-}
-
-func test() {
-
-	content, err := ioutil.ReadFile("simple-pod.yml")
-	support.CheckErr("", err)
-
-	var kubeconfigYAML map[string]interface{}
-	err = yaml.Unmarshal(content, &kubeconfigYAML)
-	support.CheckErr("", err)
-
-	_, ok := kubeconfigYAML["metadata"].(map[string]interface{})["namespace1"]
-	if ok {
-		fmt.Println("Exists")
-	} else {
-		fmt.Println("Does not exist")
-	}
-
-	os.Exit(0)
 
 }
 
@@ -128,7 +113,7 @@ func main() {
 			os.Exit(0)
 		}
 
-		initializeAdapter()
+		initializeAdapter(true)
 		os.Exit(0)
 
 	}
@@ -143,7 +128,7 @@ func main() {
 
 	} else {
 
-		initializeAdapter()
+		initializeAdapter(false)
 
 		cluster, namespace := interpolateContext()
 
@@ -227,7 +212,7 @@ func main() {
 					if err != nil {
 						fmt.Println(err)
 						if options[0] == "install" {
-							fmt.Print("  Install request, returning emptry resources: ")
+							fmt.Print("  Install request, returning empty resources: ")
 							insightJSONStr = "{}"
 						} else {
 							fmt.Print("  Current resource specs: ")
