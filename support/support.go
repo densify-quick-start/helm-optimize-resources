@@ -22,16 +22,40 @@ func CheckErr(message string, err error) {
 	}
 }
 
-func RetrieveStoredSecret(secret string, name string) string {
+func CheckError(message string, err error, exit bool) bool {
+	if err != nil {
+		if message != "" {
+			fmt.Println(message)
+		}
+		fmt.Println(err)
+		if exit {
+			os.Exit(1)
+		}
+		return true
+	}
+	return false
+}
+
+func RemoveSecret(name string) {
+
+	_, _, _ = ExecuteSingleCommand([]string{"kubectl", "delete", "secret", name, "--ignore-not-found"})
+
+}
+
+func RetrieveStoredSecret(secret string, name string) (string, error) {
 
 	valueEncoded, stdErr, err := ExecuteSingleCommand([]string{"kubectl", "get", "secret", secret, "-o", "jsonpath='{.data." + name + "}'"})
-	CheckErr(stdErr, err)
+	if err != nil {
+		return stdErr, err
+	}
 
 	valueEncoded = valueEncoded[1 : len(valueEncoded)-1]
 	valueDecoded, err := base64.StdEncoding.DecodeString(valueEncoded)
-	CheckErr("", err)
+	if err != nil {
+		return "", err
+	}
 
-	return string(valueDecoded)
+	return string(valueDecoded), nil
 
 }
 

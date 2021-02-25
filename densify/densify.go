@@ -71,6 +71,7 @@ func Initialize(create bool) error {
 	//Check if optimize-plugin-secrets already exists
 	//_, _, err := support.ExecuteCommand("kubectl", []string{"get", "secret", "optimize-plugin-secrets"})
 	if create {
+		support.RemoveSecret("optimize-plugin-secrets")
 		getSecretsFromUser()
 		_, stdErr, err := support.ExecuteCommand("kubectl", []string{"create", "secret", "generic", "optimize-plugin-secrets", "--from-literal=adapter=densify", "--from-literal=densifyURL=" + densifyURL, "--from-literal=densifyUser=" + densifyUser, "--from-literal=densifyPass=" + densifyPass})
 		support.CheckErr(stdErr, err)
@@ -151,7 +152,7 @@ func getSecretsFromUser() {
 
 	fmt.Print("Densify URL: ")
 	fmt.Scanln(&densifyURL)
-	strings.TrimSuffix(densifyURL, "/")
+	densifyURL = strings.TrimSuffix(densifyURL, "/")
 
 	fmt.Print("Densify Username: ")
 	fmt.Scanln(&densifyUser)

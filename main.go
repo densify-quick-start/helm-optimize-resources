@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -91,26 +90,23 @@ func main() {
 		os.Exit(0)
 	}
 
-	//Check if configuration already exists
-	adapterBase64, _, err := support.ExecuteSingleCommand([]string{"kubectl", "get", "secret", "optimize-plugin-secrets", "-o", "jsonpath={.data.adapter}"})
-	if err == nil {
-		adapterBytes, _ := base64.StdEncoding.DecodeString(adapterBase64)
-		adapter = string(adapterBytes)
-	}
+	//Identify configured adapter
+	adapter, err = support.RetrieveStoredSecret("optimize-plugin-secrets", "adapter")
 
 	//Check if user is configuring plugin
 	if args[0] == "-c" || args[0] == "--configure" || err != nil {
 
-		//delete existing secret.
-		_, stdErr, err = support.ExecuteSingleCommand([]string{"kubectl", "delete", "secret", "optimize-plugin-secrets", "--ignore-not-found"})
-		support.CheckErr(stdErr, err)
-
 		//get adapter selection from user
-		fmt.Print("Which adapter would you like to use? (ssm/densify): ")
-		fmt.Scanln(&adapter)
-		if adapter != "densify" && adapter != "ssm" {
-			fmt.Println("Incorrect adapter selection.  Goodbye.")
-			os.Exit(0)
+		for {
+			fmt.Print("Which adapter would you like to use (ssm/densify) [densify]: ")
+			fmt.Scanln(&adapter)
+			if adapter == "" {
+				adapter = "densify"
+			} else if adapter != "densify" && adapter != "ssm" {
+				fmt.Println("Incorrect adapter selection.  Try again.")
+				continue
+			}
+			break
 		}
 
 		initializeAdapter(true)
@@ -128,8 +124,9 @@ func main() {
 
 	} else {
 
-		initializeAdapter(false)
+		fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
 
+		initializeAdapter(false)
 		cluster, namespace := interpolateContext()
 
 		//Generate a list of values and options
@@ -154,8 +151,8 @@ func main() {
 		//replace keywords
 		i := 0
 		for {
-			valueFilesConcatenatedStr = strings.Replace(valueFilesConcatenatedStr, "{{optimize_resources}}", "{{optimize_resources_"+strconv.Itoa(i)+"}}", 1)
-			if strings.Contains(valueFilesConcatenatedStr, "{{optimize_resources}}") == false {
+			valueFilesConcatenatedStr = strings.Replace(valueFilesConcatenatedStr, "{{optimize}}", "{{optimize_"+strconv.Itoa(i)+"}}", 1)
+			if strings.Contains(valueFilesConcatenatedStr, "{{optimize}}") == false {
 				break
 			}
 			i++
@@ -194,9 +191,10 @@ func main() {
 		valueFilesJSONStr := string(valueFilesJSONByteArray)
 
 		//analyze each of the manifests separately
+		i = 1
 		manifests := strings.Split(stdOut, "---")
 		for _, s := range manifests {
-			if strings.Contains(s, "{{optimize_resources") {
+			if strings.Contains(s, "{{optimize") {
 				objNamespace, objType, objName, containers := extractObjKeysFromHelm(s)
 				support.CheckErr("", err)
 
@@ -204,18 +202,19 @@ func main() {
 					objNamespace = namespace
 				}
 
-				fmt.Println("Processing cluster[" + cluster + "] namespace[" + objNamespace + "] objType[" + objType + "] objName[" + objName + "]")
+				fmt.Println(strconv.Itoa(i) + ". Processing cluster[" + cluster + "] namespace[" + objNamespace + "] objType[" + objType + "] objName[" + objName + "]")
+				i++
 
 				for containerName, key := range containers {
-					fmt.Print("  " + containerName + ": ")
+					fmt.Print("   " + containerName + ": ")
 					insightJSONStr, err := getInsight(cluster, objNamespace, objType, objName, containerName)
 					if err != nil {
 						fmt.Println(err)
 						if options[0] == "install" {
-							fmt.Print("  Install request, returning empty resources: ")
+							fmt.Print("   Install request, returning empty resources: ")
 							insightJSONStr = "{}"
 						} else {
-							fmt.Print("  Current resource specs: ")
+							fmt.Print("   Current resource specs: ")
 							insightJSONStr, err = extractResourceSpecFromK8S(cluster, objNamespace, objType, objName, containerName)
 							support.CheckErr("", err)
 						}
@@ -253,6 +252,7 @@ func main() {
 			fmt.Println(err)
 			os.Exit(1)
 		}
+
 	}
 }
 
@@ -279,7 +279,7 @@ func extractObjKeysFromHelm(manifest string) (string, string, string, map[string
 		if err != nil {
 			support.CheckErr("", err)
 		}
-		if strings.Contains(string(containerStr), "{{optimize_resources") {
+		if strings.Contains(string(containerStr), "{{optimize") {
 			containerNames[container.(map[string]interface{})["name"].(string)] = container.(map[string]interface{})["resources"].(string)
 		}
 	}

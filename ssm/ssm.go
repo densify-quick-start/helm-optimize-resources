@@ -24,22 +24,22 @@ func Initialize(create bool) error {
 
 	//Check dependancies
 	stdOut, stdErr, err := support.ExecuteSingleCommand([]string{"whereis", "aws"})
-	support.CheckErr(stdErr, err)
+	support.CheckError(stdErr, err, true)
 	if !strings.Contains(strings.Split(stdOut, ":")[1], "aws") {
 		fmt.Println("aws-cli is not available.  please install before trying again.")
 		return errors.New("")
 	}
 
-	//Validate if stored secret is for AWS
+	//if creating new credentials
 	if create {
 
-		_, _, _ = support.ExecuteSingleCommand([]string{"kubectl", "delete", "secret", "optimize-plugin-secrets", "--ignore-not-found"})
+		support.RemoveSecret("optimize-plugin-secrets")
 
 		for {
 			fmt.Print("What is your preferred parameter key prefix [no prefix]: ")
 			fmt.Scanln(&keyPrefix)
 			if keyPrefix != "" {
-				if res1, _ := regexp.MatchString("^(aws|ssm)", keyPrefix); res1 {
+				if res1, _ := regexp.MatchString("^/{0,1}(aws|ssm)", keyPrefix); res1 {
 					fmt.Println("Parameter name: can't be prefixed with \"aws\" or \"ssm\" (case-insensitive).")
 					continue
 				}
@@ -59,11 +59,9 @@ func Initialize(create bool) error {
 				profile = "default"
 			}
 			_, stdErr, err = support.ExecuteSingleCommand([]string{"aws", "sts", "get-caller-identity", "--profile", profile})
-			if err != nil {
-				fmt.Println(stdErr)
-				continue
+			if found := support.CheckError(stdErr, err, false); !found {
+				break
 			}
-			break
 		}
 
 		for {
@@ -80,13 +78,18 @@ func Initialize(create bool) error {
 		}
 
 		_, stdErr, err := support.ExecuteSingleCommand([]string{"kubectl", "create", "secret", "generic", "optimize-plugin-secrets", "--from-literal=adapter=ssm", "--from-literal=profile=" + profile, "--from-literal=prefix=" + keyPrefix, "--from-literal=region=" + region})
-		support.CheckErr(stdErr, err)
+		support.CheckError(stdErr, err, true)
 
 	} else {
 
-		region = support.RetrieveStoredSecret("optimize-plugin-secrets", "region")
-		keyPrefix = support.RetrieveStoredSecret("optimize-plugin-secrets", "prefix")
-		profile = support.RetrieveStoredSecret("optimize-plugin-secrets", "profile")
+		region, err = support.RetrieveStoredSecret("optimize-plugin-secrets", "region")
+		support.CheckError("", err, true)
+
+		keyPrefix, err = support.RetrieveStoredSecret("optimize-plugin-secrets", "prefix")
+		support.CheckError("", err, true)
+
+		profile, err = support.RetrieveStoredSecret("optimize-plugin-secrets", "profile")
+		support.CheckError("", err, true)
 
 	}
 
@@ -111,13 +114,13 @@ func GetInsight(cluster string, namespace string, objType string, objName string
 	}
 
 	insight, err = strconv.Unquote(insight)
-	support.CheckErr("", err)
+	support.CheckError("", err, true)
 
 	var parsedInsight map[string]interface{}
 	json.Unmarshal([]byte(insight), &parsedInsight)
 
 	jsonInsight, err := json.Marshal(parsedInsight)
-	support.CheckErr("", err)
+	support.CheckError("", err, true)
 
 	return string(jsonInsight), nil
 
