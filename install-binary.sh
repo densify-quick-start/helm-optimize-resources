@@ -78,7 +78,6 @@ installFile() {
   HELM_TMP="/tmp/$PROJECT_NAME"
   mkdir -p "$HELM_TMP"
   tar zxf "$PLUGIN_TMP_FILE" -C "$HELM_TMP"
-  echo "$HELM_TMP"
   HELM_TMP_BIN="$HELM_TMP/helm-optimize-resources"
   echo "Preparing to install into ${HELM_PLUGINS}"
   # Use * to also copy the file withe the exe suffix on Windows
