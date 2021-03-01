@@ -1,13 +1,9 @@
 package densify
 
 import (
-	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -65,38 +61,47 @@ var (
 )
 
 //Initialize will initilize the densify secrets k8s object, if it doesn't exist in the current-context.
-func Initialize(create bool) error {
+func Initialize() error {
 
-	//Extract Secrets
-	//Check if optimize-plugin-secrets already exists
-	//_, _, err := support.ExecuteCommand("kubectl", []string{"get", "secret", "optimize-plugin-secrets"})
-	if create {
-		support.RemoveSecret("optimize-plugin-secrets")
-		getSecretsFromUser()
-		_, stdErr, err := support.ExecuteCommand("kubectl", []string{"create", "secret", "generic", "optimize-plugin-secrets", "--from-literal=adapter=densify", "--from-literal=densifyURL=" + densifyURL, "--from-literal=densifyUser=" + densifyUser, "--from-literal=densifyPass=" + densifyPass})
-		support.CheckErr(stdErr, err)
-	} else {
-		extractSecretsFromK8s()
-	}
-
-	//Validate the credentials.
-	resp, err := validateSecrets()
+	_, err := support.RetrieveStoredSecret("optimize-plugin-secrets", "adapter")
 	if err != nil {
 
-		if resp != "" {
-			fmt.Println(resp)
-		} else {
-			fmt.Println(err)
-		}
-		_, _, _ = support.ExecuteSingleCommand([]string{"kubectl", "delete", "secret", "optimize-plugin-secrets", "--ignore-not-found"})
+		fmt.Print("Densify URL: ")
+		fmt.Scanln(&densifyURL)
+		densifyURL = strings.TrimSuffix(densifyURL, "/")
 
-		var tryAgain string
-		fmt.Print("Would you like to try again [y]: ")
-		fmt.Scanln(&tryAgain)
-		if tryAgain == "y" || tryAgain == "" {
-			Initialize(true)
+		fmt.Print("Densify Username: ")
+		fmt.Scanln(&densifyUser)
+
+		fmt.Print("Densify Password: ")
+		pass, _ := terminal.ReadPassword(0)
+		densifyPass = string(pass)
+		fmt.Println("")
+
+		_, stdErr, err := support.ExecuteSingleCommand([]string{"kubectl", "create", "secret", "generic", "optimize-plugin-secrets", "--from-literal=adapter=densify", "--from-literal=densifyURL=" + densifyURL, "--from-literal=densifyUser=" + densifyUser, "--from-literal=densifyPass=" + densifyPass})
+		if err != nil {
+			return errors.New(stdErr)
 		}
 
+	} else {
+
+		densifyURL, err = support.RetrieveStoredSecret("optimize-plugin-secrets", "densifyURL")
+		if err != nil {
+			return err
+		}
+
+		densifyUser, err = support.RetrieveStoredSecret("optimize-plugin-secrets", "densifyUser")
+		if err != nil {
+			return err
+		}
+		densifyPass, err = support.RetrieveStoredSecret("optimize-plugin-secrets", "densifyPass")
+		if err != nil {
+			return err
+		}
+
+	}
+
+	if err = validateSecrets(); err != nil {
 		return err
 	}
 
@@ -105,21 +110,21 @@ func Initialize(create bool) error {
 }
 
 //GetInsight gets an insight from densify based on the keys cluster, namespace, objType, objName and containerName
-func GetInsight(cluster string, namespace string, objType string, objName string, containerName string) (string, error) {
+func GetInsight(cluster string, namespace string, objType string, objName string, containerName string) (map[string]map[string]string, error) {
 
 	if _, ok := insightCache[cluster]; !ok {
-		resp, err := getRequest(analysisEP)
+		resp, err := support.HttpRequest("GET", densifyURL+analysisEP, densifyUser+":"+densifyPass, nil)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		var analyses []interface{}
 		found := false
 		json.Unmarshal([]byte(resp), &analyses)
 		for _, analysis := range analyses {
 			if analysis.(map[string]interface{})["analysisName"].(string) == cluster {
-				resp, err = getRequest(analysisEP + "/" + analysis.(map[string]interface{})["analysisId"].(string) + "/results")
+				resp, err = support.HttpRequest("GET", densifyURL+analysisEP+"/"+analysis.(map[string]interface{})["analysisId"].(string)+"/results", densifyUser+":"+densifyPass, nil)
 				if err != nil {
-					return "", err
+					return nil, err
 				}
 
 				var insights []Insight
@@ -130,7 +135,7 @@ func GetInsight(cluster string, namespace string, objType string, objName string
 			}
 		}
 		if found == false {
-			return "", errors.New("unable to locate insight")
+			return nil, errors.New("unable to locate insight in densify")
 		}
 	}
 
@@ -139,118 +144,40 @@ func GetInsight(cluster string, namespace string, objType string, objName string
 		if insight.Cluster == cluster && insight.Namespace == namespace && insight.ControllerType == objType &&
 			insight.PodService == objName && insight.Container == containerName && insight.RecommendedCPULimit > 0 &&
 			insight.RecommendedCPURequest > 0 && insight.RecommendedMemLimit > 0 && insight.RecommendedMemRequest > 0 {
-			return "{\"limits\":{\"cpu\":\"" + strconv.Itoa(insight.RecommendedCPULimit) + "m\",\"memory\":\"" + strconv.Itoa(insight.RecommendedMemLimit) + "Mi\"},\"requests\":{\"cpu\":\"" + strconv.Itoa(insight.RecommendedCPURequest) + "m\",\"memory\":\"" + strconv.Itoa(insight.RecommendedMemRequest) + "Mi\"}}", nil
+
+			var insightObj = map[string]map[string]string{}
+			insightObj["limits"] = map[string]string{}
+			insightObj["requests"] = map[string]string{}
+
+			insightObj["limits"]["cpu"] = strconv.Itoa(insight.RecommendedCPULimit) + "m"
+			insightObj["limits"]["memory"] = strconv.Itoa(insight.RecommendedMemLimit) + "Mi"
+			insightObj["requests"]["cpu"] = strconv.Itoa(insight.RecommendedCPURequest) + "m"
+			insightObj["requests"]["memory"] = strconv.Itoa(insight.RecommendedMemRequest) + "Mi"
+
+			return insightObj, nil
 		}
 
 	}
 
-	return "", errors.New("unable to locate insight")
+	return nil, errors.New("unable to locate insight in densify")
 
 }
 
-func getSecretsFromUser() {
-
-	fmt.Print("Densify URL: ")
-	fmt.Scanln(&densifyURL)
-	densifyURL = strings.TrimSuffix(densifyURL, "/")
-
-	fmt.Print("Densify Username: ")
-	fmt.Scanln(&densifyUser)
-
-	fmt.Print("Densify Password: ")
-	pass, _ := terminal.ReadPassword(0)
-	densifyPass = string(pass)
-	fmt.Println("")
-
-}
-
-func extractSecretsFromK8s() {
-
-	densifyURLEncoded, _, _ := support.ExecuteCommand("kubectl", []string{"get", "secret", "optimize-plugin-secrets", "-o", "jsonpath='{.data.densifyURL}'"})
-	densifyURLEncoded = densifyURLEncoded[1 : len(densifyURLEncoded)-1]
-	densifyURLDecoded, _ := base64.StdEncoding.DecodeString(densifyURLEncoded)
-	densifyURL = string(densifyURLDecoded)
-
-	densifyUserEncoded, _, _ := support.ExecuteCommand("kubectl", []string{"get", "secret", "optimize-plugin-secrets", "-o", "jsonpath='{.data.densifyUser}'"})
-	densifyUserEncoded = densifyUserEncoded[1 : len(densifyUserEncoded)-1]
-	densifyUserDecoded, _ := base64.StdEncoding.DecodeString(densifyUserEncoded)
-	densifyUser = string(densifyUserDecoded)
-
-	densifyPassEncoded, _, _ := support.ExecuteCommand("kubectl", []string{"get", "secret", "optimize-plugin-secrets", "-o", "jsonpath='{.data.densifyPass}'"})
-	densifyPassEncoded = densifyPassEncoded[1 : len(densifyPassEncoded)-1]
-	densifyPassDecoded, _ := base64.StdEncoding.DecodeString(densifyPassEncoded)
-	densifyPass = string(densifyPassDecoded)
-
-}
-
-func validateSecrets() (string, error) {
+func validateSecrets() error {
 
 	jsonReq, err := json.Marshal(map[string]string{
 		"userName": densifyUser,
 		"pwd":      densifyPass,
 	})
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	resp, err := postRequest(authorizeEP, jsonReq)
+	_, err = support.HttpRequest("POST", densifyURL+authorizeEP, densifyUser+":"+densifyPass, jsonReq)
 	if err != nil {
-		return resp, err
+		return err
 	}
 
-	return resp, nil
-
-}
-
-func getRequest(endpoint string) (string, error) {
-
-	auth := base64.StdEncoding.EncodeToString([]byte(densifyUser + ":" + densifyPass))
-	req, err := http.NewRequest(http.MethodGet, densifyURL+endpoint, nil)
-	req.Header.Add("Authorization", "Basic "+auth)
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Accept", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-
-	defer resp.Body.Close()
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if resp.StatusCode == 200 {
-		return string(bodyBytes), nil
-	} else {
-		return string(bodyBytes), errors.New("")
-	}
-}
-
-func postRequest(endpoint string, body []byte) (string, error) {
-
-	auth := base64.StdEncoding.EncodeToString([]byte(densifyUser + ":" + densifyPass))
-	req, _ := http.NewRequest(http.MethodPost, densifyURL+endpoint, bytes.NewBuffer(body))
-	req.Header.Add("Authorization", "Basic "+auth)
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Accept", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-
-	defer resp.Body.Close()
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if resp.StatusCode == 200 {
-		return string(bodyBytes), nil
-	} else {
-		return string(bodyBytes), errors.New("")
-	}
+	return nil
 
 }

@@ -4,24 +4,16 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 )
 
-func CheckErr(message string, err error) {
-	if err != nil {
-		if message != "" {
-			fmt.Println(message)
-		}
-		fmt.Println(err)
-		os.Exit(1)
-	}
-}
-
+//CheckError
 func CheckError(message string, err error, exit bool) bool {
 	if err != nil {
 		if message != "" {
@@ -36,17 +28,17 @@ func CheckError(message string, err error, exit bool) bool {
 	return false
 }
 
+//RemoveSecret deletes the specified k8s secret
 func RemoveSecret(name string) {
-
 	_, _, _ = ExecuteSingleCommand([]string{"kubectl", "delete", "secret", name, "--ignore-not-found"})
-
 }
 
+//RetrieveStoredSecret extract a secret stored within K8S.  Only in working namespace.
 func RetrieveStoredSecret(secret string, name string) (string, error) {
 
 	valueEncoded, stdErr, err := ExecuteSingleCommand([]string{"kubectl", "get", "secret", secret, "-o", "jsonpath='{.data." + name + "}'"})
 	if err != nil {
-		return stdErr, err
+		return "", errors.New(stdErr)
 	}
 
 	valueEncoded = valueEncoded[1 : len(valueEncoded)-1]
@@ -92,81 +84,15 @@ func ExecuteSingleCommand(command []string) (string, string, error) {
 
 }
 
-//ExecuteCommand this function executes a given command.
-func ExecuteCommand(command string, args []string) (string, string, error) {
+//LinuxCommandExists checks to see if the linux command is available via command line
+func LinuxCommandExists(command string) bool {
 
-	cmd := exec.Command(command, args...)
-	stderr, _ := cmd.StderrPipe()
-	stdout, _ := cmd.StdoutPipe()
-
-	err := cmd.Start()
-
-	scannerErr := bufio.NewScanner(stderr)
-	errStr := ""
-	for scannerErr.Scan() {
-		errStr += scannerErr.Text() + "\n"
+	stdOut, stdErr, err := ExecuteSingleCommand([]string{"whereis", command})
+	CheckError(stdErr, err, false)
+	if !strings.Contains(strings.Split(stdOut, ":")[1], command) {
+		return false
 	}
-
-	scannerOut := bufio.NewScanner(stdout)
-	outStr := ""
-	for scannerOut.Scan() {
-		outStr += scannerOut.Text() + "\n"
-	}
-
-	if len(outStr) > 0 {
-		outStr = outStr[:len(outStr)-1]
-	}
-	if len(errStr) > 0 {
-		errStr = errStr[:len(errStr)-1]
-	}
-
-	err = cmd.Wait()
-	return outStr, errStr, err
-
-}
-
-//ExecuteTwoCmdsWithPipe this function executes a given command.
-func ExecuteTwoCmdsWithPipe(cmd1 []string, cmd2 []string) (string, error) {
-
-	//create command
-	command1 := exec.Command(cmd1[0], cmd1[1:]...)
-	command2 := exec.Command(cmd2[0], cmd2[1:]...)
-
-	//make a pipe
-	reader, writer := io.Pipe()
-	var buf bytes.Buffer
-
-	//set the output of "cat" command to pipe writer
-	command1.Stdout = writer
-	//set the input of the "wc" command pipe reader
-
-	command2.Stdin = reader
-
-	//cache the output of "wc" to memory
-	command2.Stdout = &buf
-
-	//start to execute "cat" command
-	command1.Start()
-
-	//start to execute "wc" command
-	command2.Start()
-
-	//waiting for "cat" command complete and close the writer
-	command1.Wait()
-	writer.Close()
-
-	//waiting for the "wc" command complete and close the reader
-	command2.Wait()
-	reader.Close()
-	//copy the buf to the standard output
-
-	strBuf := new(strings.Builder)
-	_, err := io.Copy(strBuf, &buf)
-	if err != nil {
-		return "", err
-	}
-
-	return strBuf.String(), nil
+	return true
 
 }
 
@@ -217,5 +143,33 @@ func DeleteFile(filepath string) error {
 	}
 
 	return nil
+
+}
+
+//HttpRequest send a REST api request to an end point
+func HttpRequest(method string, endpoint string, authStr string, body []byte) (string, error) {
+
+	auth := base64.StdEncoding.EncodeToString([]byte(authStr))
+	req, _ := http.NewRequest(method, endpoint, bytes.NewBuffer(body))
+	req.Header.Add("Authorization", "Basic "+auth)
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Accept", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	defer resp.Body.Close()
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode == 200 {
+		return string(bodyBytes), nil
+	} else {
+		return "", errors.New(string(bodyBytes))
+	}
 
 }
