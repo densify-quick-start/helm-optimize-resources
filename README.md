@@ -62,3 +62,24 @@ Again, the "HELM COMMAND" is nothing more than your normal helm install or upgra
 
 ## Example
 [![Watch the video](https://image.ibb.co/i4rBSR/1920x1080_125pct_laptop.png)](https://asciinema.org/a/Rxbp7rQpwEhGZ0G9Hx8HrFzNx)
+
+# Installation
+Choose the latest version from the releases and install the
+appropriate version for your OS as indicated below.
+
+```sh
+$ helm plugin add https://github.com/codacy/helm-ssm
+```
+
+### Developer (From Source) Install
+
+If you would like to handle the build yourself, instead of fetching a binary, this is how we recommend doing it.
+
+- Make sure you have [Go](http://golang.org) installed.
+
+- Clone this project
+
+- In the project directory run
+```sh
+$ go build helm-optimize-resources.go
+```
