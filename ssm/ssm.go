@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"../support"
+	"github.com/densify-quick-start/helm-optimize-resources/support"
 )
 
 var (

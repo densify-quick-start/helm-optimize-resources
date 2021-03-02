@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	support "../support"
+	"github.com/densify-quick-start/helm-optimize-resources/support"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
