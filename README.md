@@ -83,3 +83,7 @@ If you would like to handle the build yourself, instead of fetching a binary, th
 ```sh
 $ go build helm-optimize-resources.go
 ```
+
+## License
+helm-optimize-resources is available under the Apache 2.0 license. See the LICENSE file for more info.
+
