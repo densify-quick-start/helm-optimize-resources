@@ -60,3 +60,5 @@ Eg. helm optimize (install/upgrade) chart chart_dir/ --values value-file1.yaml -
 ```
 Again, the "HELM COMMAND" is nothing more than your normal helm install or upgrade command.
 
+[![Demo CountPages alpha](https://share.gifyoutube.com/KzB6Gb.gif)](https://www.youtube.com/watch?v=ek1j272iAmc)
+
