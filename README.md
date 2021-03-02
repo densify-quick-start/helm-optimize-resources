@@ -1,13 +1,13 @@
 # Helm Optimize Resource Plugin
 
-## Introduction
+### Introduction
 This is a helmV3 plugin to optimize your container resources (CPU/Memory Requests/Limits) by injecting optimal specifications, extracted from your choice of a parameter repository whenever helm is called to install or upgrade a chart.
 
-## Pre-requisits
+### Pre-requisits
 - Densify account, which is provided with a Densify subscription or through a free trial (https://www.densify.com/service/signup)
 - Linux/Windows client machine with kubectl and helm installed and configured
 
-# Usage
+## Usage
 Once installed, the plugin is made available through the 'optimize' keyword which is passed in as the first parameter to helm.  Here is an output of the helm command after the plugin is installed.  Note the availability of a new command 'optimize'.
 ```
 Available Commands:
@@ -42,7 +42,7 @@ You can call the plugin by issuing commands in the following format.
 helm optimize [OPTION]
 helm optimize [HELM COMMAND]
 ```
-## Options
+### Options
 To access plugin options use the following format.
 ```
 helm optimize [OPTION]
@@ -51,7 +51,7 @@ helm optimize [OPTION]
 -h, --help, help
   use this to get more information about the optimize plugin for helm
 ```
-## Optimization
+### Optimization
 Simply use helm as you normally would, but add the 'optimize' keyword before any command.  The plugin will lookup the optimal resource spec from the configured repository.
 To optimize your container resources when installing or upgrading a chart, use the following format.
 ```
@@ -60,10 +60,10 @@ Eg. helm optimize (install/upgrade) chart chart_dir/ --values value-file1.yaml -
 ```
 Again, the "HELM COMMAND" is nothing more than your normal helm install or upgrade command.
 
-## Example
+### Example
 [![Watch the video](https://image.ibb.co/i4rBSR/1920x1080_125pct_laptop.png)](https://asciinema.org/a/Rxbp7rQpwEhGZ0G9Hx8HrFzNx)
 
-# Installation
+## Installation
 Choose the latest version from the releases and install the
 appropriate version for your OS as indicated below.
 
