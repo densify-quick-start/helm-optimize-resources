@@ -68,7 +68,7 @@ Choose the latest version from the releases and install the
 appropriate version for your OS as indicated below.
 
 ```sh
-$ helm plugin add https://github.com/codacy/helm-ssm
+$ helm plugin install https://github.com/densify-quick-start/helm-optimize-resources
 ```
 
 ### Developer (From Source) Install
