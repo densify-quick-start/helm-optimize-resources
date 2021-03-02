@@ -41,12 +41,13 @@ You can call the plugin by issuing commands in the following format.
     helm optimize [OPTION]
     helm optimize [HELM COMMAND]
 
-# OPTION
+# OPTIONS
+```
 -c, --configure
   use this command to invoke a wizard to configure the parameter repo adapter.
-    
 -h, --help, help
   use this to get more information about the optimize plugin for helm
+```
 # OPTIMIZATION
 helm optimize (install/upgrade) chart chart_dir/ --values value-file1.yaml -f value-file2.yaml
 
