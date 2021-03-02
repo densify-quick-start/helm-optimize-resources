@@ -5,7 +5,7 @@ This is a helmV3 plugin to optimize your container resources (CPU/Memory Request
 
 ### Pre-requisits
 - Densify account, which is provided with a Densify subscription or through a free trial (https://www.densify.com/service/signup)
-- Linux/Windows client machine with kubectl and helm installed and configured
+- Linux/Windows client machine with kubectl and helm v3 installed and configured
 
 ## Usage
 Once installed, the plugin is made available through the 'optimize' keyword which is passed in as the first parameter to helm.  Here is an output of the helm command after the plugin is installed.  Note the availability of a new command 'optimize'.
