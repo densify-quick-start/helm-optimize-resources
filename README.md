@@ -7,6 +7,27 @@ This is a helmV3 plugin to optimize your container resources (CPU/Memory Request
 - Densify account, which is provided with a Densify subscription or through a free trial (https://www.densify.com/service/signup)
 - Linux/Windows client machine with kubectl and helm v3 installed and configured
 
+## Installation
+Choose the latest version from the releases and install the
+appropriate version for your OS as indicated below.
+
+```sh
+$ helm plugin install https://github.com/densify-quick-start/helm-optimize-resources
+```
+
+### Developer (From Source) Install
+
+If you would like to handle the build yourself, instead of fetching a binary, this is how we recommend doing it.
+
+- Make sure you have [Go](http://golang.org) installed.
+
+- Clone this project
+
+- In the project directory run
+```sh
+$ go build helm-optimize-resources.go
+```
+
 ## Usage
 Once installed, the plugin is made available through the 'optimize' keyword which is passed in as the first parameter to helm.  Here is an output of the helm command after the plugin is installed.  Note the availability of a new command 'optimize'.
 ```
@@ -62,27 +83,6 @@ Again, the "HELM COMMAND" is nothing more than your normal helm install or upgra
 
 ### Example
 [![Watch the video](https://image.ibb.co/i4rBSR/1920x1080_125pct_laptop.png)](https://asciinema.org/a/Rxbp7rQpwEhGZ0G9Hx8HrFzNx)
-
-## Installation
-Choose the latest version from the releases and install the
-appropriate version for your OS as indicated below.
-
-```sh
-$ helm plugin install https://github.com/densify-quick-start/helm-optimize-resources
-```
-
-### Developer (From Source) Install
-
-If you would like to handle the build yourself, instead of fetching a binary, this is how we recommend doing it.
-
-- Make sure you have [Go](http://golang.org) installed.
-
-- Clone this project
-
-- In the project directory run
-```sh
-$ go build helm-optimize-resources.go
-```
 
 ## License
 helm-optimize-resources is available under the Apache 2.0 license. See the LICENSE file for more info.
