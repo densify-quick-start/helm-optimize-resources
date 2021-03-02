@@ -42,7 +42,7 @@ You can call the plugin by issuing commands in the following format.
 helm optimize [OPTION]
 helm optimize [HELM COMMAND]
 ```
-## OPTIONS
+## Options
 To access plugin options use the following format.
 ```
 helm optimize [OPTION]
@@ -51,7 +51,7 @@ helm optimize [OPTION]
 -h, --help, help
   use this to get more information about the optimize plugin for helm
 ```
-## OPTIMIZATION
+## Optimization
 Simply use helm as you normally would, but add the 'optimize' keyword before any command.  The plugin will lookup the optimal resource spec from the configured repository.
 To optimize your container resources when installing or upgrading a chart, use the following format.
 ```
@@ -60,6 +60,6 @@ Eg. helm optimize (install/upgrade) chart chart_dir/ --values value-file1.yaml -
 ```
 Again, the "HELM COMMAND" is nothing more than your normal helm install or upgrade command.
 
-## EXAMPLE
+## Example
 [![asciicast]](https://asciinema.org/connect/2e6b8e3a-208c-42ee-b1bc-cd61711b693a)
 
