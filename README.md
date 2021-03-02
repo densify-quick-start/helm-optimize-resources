@@ -61,5 +61,4 @@ Eg. helm optimize (install/upgrade) chart chart_dir/ --values value-file1.yaml -
 Again, the "HELM COMMAND" is nothing more than your normal helm install or upgrade command.
 
 ## Example
-Recording(https://densify.zoom.us/rec/share/4v1cqNRem-BB8SJHh9KaDXVmS85MlXu88kxnB7tgPdtpA7583CkUU9RMa7PvjVHa.kHvOGWAi7ZmB_WBS)
-
+[![Watch the video](https://upload.wikimedia.org/wikipedia/commons/b/b3/Command_Prompt_on_Windows_10_RTM.png)](https://youtu.be/vt5fpE0bzSY)
