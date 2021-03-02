@@ -21,7 +21,7 @@ Available Commands:
   install     install a chart
   lint        examine a chart for possible issues
   list        list releases
-  optimize    optimize resource spec of running containers during an install or upgrade
+  <mark>optimize    optimize resource spec of running containers during an install or upgrade</mark>
   package     package a chart directory into a chart archive
   plugin      install, list, or uninstall Helm plugins
   pull        download a chart from a repository and (optionally) unpack it in local directory
