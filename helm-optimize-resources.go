@@ -137,7 +137,7 @@ func main() {
 
 	//Check general dependancies
 	if _, _, err := support.ExecuteSingleCommand([]string{"kubectl", "version"}); err != nil {
-		fmt.Println("kubectl is not installed or is not in path")
+		fmt.Println("kubectl is not installed, not in path or not configured correctly")
 		os.Exit(0)
 	}
 
