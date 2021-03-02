@@ -43,15 +43,20 @@ helm optimize [OPTION]
 helm optimize [HELM COMMAND]
 ```
 ## OPTIONS
+To access plugin options use the following format.
 ```
+helm optimize [OPTION]
 -c, --configure
   use this command to invoke a wizard to configure the parameter repo adapter.
 -h, --help, help
   use this to get more information about the optimize plugin for helm
 ```
 ## OPTIMIZATION
-helm optimize (install/upgrade) chart chart_dir/ --values value-file1.yaml -f value-file2.yaml
-
-
-
 Simply use helm as you normally would, but add the 'optimize' keyword before any command.  The plugin will lookup the optimal resource spec from the configured repository.
+To optimize your container resources when installing or upgrading a chart, use the following format.
+```
+helm optimize [HELM COMMAND]
+Eg. helm optimize (install/upgrade) chart chart_dir/ --values value-file1.yaml -f value-file2.yaml
+```
+Again, the "HELM COMMAND" is nothing more than your normal helm install or upgrade command.
+
