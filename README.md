@@ -20,7 +20,8 @@ Available Commands:
   history     fetch release history
   install     install a chart
   lint        examine a chart for possible issues
-  list        list releases```
+  list        list releases
+```
   optimize    optimize resource spec of running containers during an install or upgrade
   package     package a chart directory into a chart archive
   plugin      install, list, or uninstall Helm plugins
