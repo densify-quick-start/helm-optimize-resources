@@ -8,7 +8,7 @@ This is a helmV3 plugin to optimize your container resources (CPU/Memory Request
 - Linux/Windows client machine with kubectl and helm installed and configured
 
 ## Usage
-Once installed, the plugin is made available through the 'optimize' keyword which is passed in as the first parameter to helm.  Here is an output of the helm command after the plugin is installed.
+Once installed, the plugin is made available through the 'optimize' keyword which is passed in as the first parameter to helm.  Here is an output of the helm command after the plugin is installed.  Note the availability of a new command 'optimize'.
 ```
 Available Commands:
   completion  generate autocompletion scripts for the specified shell
@@ -21,9 +21,7 @@ Available Commands:
   install     install a chart
   lint        examine a chart for possible issues
   list        list releases
-```
-  <mark>optimize    optimize resource spec of running containers during an install or upgrade</mark>
-```
+  optimize    optimize resource spec of running containers during an install or upgrade
   package     package a chart directory into a chart archive
   plugin      install, list, or uninstall Helm plugins
   pull        download a chart from a repository and (optionally) unpack it in local directory
