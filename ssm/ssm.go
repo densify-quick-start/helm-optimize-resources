@@ -23,7 +23,7 @@ var supportedRegions = []string{"us-east-2", "us-east-1", "us-west-1", "us-west-
 func Initialize() error {
 
 	//Check dependancies
-	if !support.LinuxCommandExists("aws") {
+	if _, _, err := support.ExecuteSingleCommand([]string{"aws", "--version"}); err != nil {
 		return errors.New("aws-cli is not available - please install before trying again")
 	}
 

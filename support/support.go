@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"strings"
 )
 
 //CheckError
@@ -81,18 +80,6 @@ func ExecuteSingleCommand(command []string) (string, string, error) {
 
 	err = cmd.Wait()
 	return outStr, errStr, err
-
-}
-
-//LinuxCommandExists checks to see if the linux command is available via command line
-func LinuxCommandExists(command string) bool {
-
-	stdOut, stdErr, err := ExecuteSingleCommand([]string{"whereis", command})
-	CheckError(stdErr, err, false)
-	if !strings.Contains(strings.Split(stdOut, ":")[1], command) {
-		return false
-	}
-	return true
 
 }
 

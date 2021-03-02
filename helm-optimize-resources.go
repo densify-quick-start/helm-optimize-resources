@@ -136,7 +136,7 @@ func main() {
 	args := os.Args[1:]
 
 	//Check general dependancies
-	if !support.LinuxCommandExists("kubectl") {
+	if _, _, err := support.ExecuteSingleCommand([]string{"kubectl", "version"}); err != nil {
 		fmt.Println("kubectl is not installed or is not in path")
 		os.Exit(0)
 	}
