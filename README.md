@@ -61,5 +61,5 @@ Eg. helm optimize (install/upgrade) chart chart_dir/ --values value-file1.yaml -
 Again, the "HELM COMMAND" is nothing more than your normal helm install or upgrade command.
 
 ## Example
-[![asciicast]](https://asciinema.org/connect/2e6b8e3a-208c-42ee-b1bc-cd61711b693a)
+Recording(https://densify.zoom.us/rec/share/4v1cqNRem-BB8SJHh9KaDXVmS85MlXu88kxnB7tgPdtpA7583CkUU9RMa7PvjVHa.kHvOGWAi7ZmB_WBS)
 
