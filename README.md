@@ -7,7 +7,7 @@ This is a helmV3 plugin to optimize your container resources (CPU/Memory Request
 - Densify account, which is provided with a Densify subscription or through a free trial (https://www.densify.com/service/signup)
 - Linux/Windows client machine with kubectl and helm installed and configured
 
-## Usage
+# Usage
 Once installed, the plugin is made available through the 'optimize' keyword which is passed in as the first parameter to helm.  Here is an output of the helm command after the plugin is installed.  Note the availability of a new command 'optimize'.
 ```
 Available Commands:
@@ -37,18 +37,19 @@ Available Commands:
   verify      verify that a chart at the given path has been signed and is valid
   version     print the client version information
 ```
-You can call the plugin by issuing commands in the following format.  
-    helm optimize [OPTION]
-    helm optimize [HELM COMMAND]
-
-# OPTIONS
+You can call the plugin by issuing commands in the following format.
+```
+helm optimize [OPTION]
+helm optimize [HELM COMMAND]
+```
+## OPTIONS
 ```
 -c, --configure
   use this command to invoke a wizard to configure the parameter repo adapter.
 -h, --help, help
   use this to get more information about the optimize plugin for helm
 ```
-# OPTIMIZATION
+## OPTIMIZATION
 helm optimize (install/upgrade) chart chart_dir/ --values value-file1.yaml -f value-file2.yaml
 
 
