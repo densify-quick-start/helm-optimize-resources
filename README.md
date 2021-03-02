@@ -14,6 +14,10 @@ appropriate version for your OS as indicated below.
 ```sh
 $ helm plugin install https://github.com/densify-quick-start/helm-optimize-resources
 ```
+If your running this command on Windows and run into the below error, then navigate to ${HELM_PLUGINS}/helm-optimize-resources and run the 'install-binary.sh' script manually.
+```
+Error: exec: "sh": executable file not found in %PATH%
+```
 
 ### Developer (From Source) Install
 
