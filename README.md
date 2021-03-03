@@ -11,13 +11,17 @@ When the plugin is utilized, the following operations are completed **in the spe
 ### Prerequisites
 - Densify account, which is provided with a Densify subscription or through a free trial (https://www.densify.com/service/signup)
 - Linux/Windows client machine with kubectl and helm v3 installed and configured
+**Note that if you intend on using a Windows client, it is recommended that you install the plugin from WSL or MinGW64**
+- [WSL](https://docs.microsoft.com/en-us/windows/wsl/install-win10)
+- [Mingw-w64](http://mingw-w64.org/doku.php/start)
+- [GIT Bash](https://gitforwindows.org/)
 
 ## Installation
 Simply run the below command to install the plugin.
 ```sh
 $ helm plugin install https://github.com/densify-quick-start/helm-optimize-resources
 ```
-For Windows installation, it's recommended that you issue the above command through [WSL](https://docs.microsoft.com/en-us/windows/wsl/install-win10) or [GIT Bash](https://gitforwindows.org/).  
+For Windows installation, it's recommended that you issue the above command through .  
 
 If your running this command from Windows command prompt, you will likely run into the following error.  To complete the install, navigate to the plugin directory ($HELM_PLUGINS\helm-optimize-resources) and execute install-binary.sh manually.  You can find your $HELM_PLUGINS directory by issuing the 'helm env' command.
 ```
