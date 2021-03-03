@@ -3,7 +3,7 @@
 ### Introduction
 This is a helmV3 plugin to optimize your container resources (CPU/Memory Requests/Limits) by injecting optimal specifications, extracted from your choice of a parameter repository whenever helm is called to install or upgrade a chart.
 
-When the plugin is utilized, the following operations are completed on each container resource within your helm application stack.  
+When the plugin is utilized, the following operations are completed **in order as needed** on each container within your helm application stack.  
 1) Implement optimal specifications found in the parameter repository.
 2) If the parameter repo is down or there is no optimal spec at the time of execution, then maintain the current configuration of container.  (i.e no changes)
 3) If the container is not currently running (case INSTALL) or the container is currently running with no resource specification, then implement the default configuration found in the VALUES.yaml file(s)
@@ -38,7 +38,7 @@ $ go build helm-optimize-resources.go
 ```
 
 ## Usage
-Once installed, the plugin is made available through the 'optimize' keyword which is passed in as the first parameter to helm.  Here is an output of the helm command after the plugin is installed.  Note the availability of a new command 'optimize'.
+Once installed, the plugin is made available through the 'optimize' keyword which is passed in as the first parameter to helm.  Here is an output of the helm command after the plugin is installed.  Note the availability of a new command '*optimize'.
 ```
 Available Commands:
   completion  generate autocompletion scripts for the specified shell
@@ -51,7 +51,7 @@ Available Commands:
   install     install a chart
   lint        examine a chart for possible issues
   list        list releases
-  optimize    optimize resource spec of running containers during an install or upgrade
+ *optimize    optimize resource spec of running containers during an install or upgrade
   package     package a chart directory into a chart archive
   plugin      install, list, or uninstall Helm plugins
   pull        download a chart from a repository and (optionally) unpack it in local directory
