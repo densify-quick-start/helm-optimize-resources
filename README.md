@@ -24,8 +24,6 @@ Simply run the below command to install the plugin.
 ```sh
 $ helm plugin install https://github.com/densify-quick-start/helm-optimize-resources
 ```
-For Windows installation, it's recommended that you issue the above command through .  
-
 If your running this command from Windows command prompt, you will likely run into the following error.  To complete the install, navigate to the plugin directory ($HELM_PLUGINS\helm-optimize-resources) and execute install-binary.sh manually.  You can find your $HELM_PLUGINS directory by issuing the 'helm env' command.
 ```
 Error: exec: "sh": executable file not found in %PATH%
