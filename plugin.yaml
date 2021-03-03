@@ -27,5 +27,5 @@ ignoreFlags: false
 useTunnel: false
 command: "$HELM_PLUGIN_DIR/helm-optimize-resources"
 hooks:
-  install: chmod +x $HELM_PLUGIN_DIR/install-binary.sh; echo hello
-  update: chmod +x $HELM_PLUGIN_DIR/install-binary.sh; echo hello
+  install: "$HELM_PLUGIN_DIR/install-binary1.sh"
+  update: "$HELM_PLUGIN_DIR/install-binary1.sh"
