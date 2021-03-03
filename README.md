@@ -8,13 +8,13 @@ This is a helmV3 plugin to optimize your container resources (CPU/Memory Request
 - Linux/Windows client machine with kubectl and helm v3 installed and configured
 
 ## Installation
-Choose the latest version from the releases and install the
-appropriate version for your OS as indicated below.
-
+Simply run the below command to install the plugin.
 ```sh
 $ helm plugin install https://github.com/densify-quick-start/helm-optimize-resources
 ```
-If your running this command on Windows and run into the below error, then navigate to ${HELM_PLUGINS}/helm-optimize-resources and run the 'install-binary.sh' script manually.
+For Windows installation, it's recommended that you issue the above command through [WSL](https://docs.microsoft.com/en-us/windows/wsl/install-win10) or [GIT Bash](https://gitforwindows.org/).  
+
+If your running this command from Windows command prompt, you will likely run into the following error.  To complete the install, navigate to the plugin directory ($HELM_PLUGINS\helm-optimize-resources) and execute install-binary-sh manually.  You can find your $HELM_PLUGINS directory by issuing the 'helm env' command.
 ```
 Error: exec: "sh": executable file not found in %PATH%
 ```
