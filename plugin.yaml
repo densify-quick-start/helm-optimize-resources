@@ -27,5 +27,5 @@ ignoreFlags: false
 useTunnel: false
 command: "$HELM_PLUGIN_DIR/helm-optimize-resources"
 hooks:
-  install: "$HELM_PLUGIN_DIR/install-binary.sh"
+  install: "C:\Users\drave\AppData\Roaming\helm\plugins\helm-optimize-resources\install-binary.sh"
   update: "$HELM_PLUGIN_DIR/install-binary.sh"
