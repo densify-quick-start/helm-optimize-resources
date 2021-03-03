@@ -13,6 +13,7 @@ When the plugin is utilized, the following operations are completed **in the spe
 - Linux/Windows client machine with kubectl and helm v3 installed and configured
 
 **WINDOWS ONLY - Special Requirements**
+
 if you intend on using a Windows client, it is recommended that you install the plugin from WSL or MinGW64
 - [WSL](https://docs.microsoft.com/en-us/windows/wsl/install-win10)
 - [Mingw-w64](http://mingw-w64.org/doku.php/start)
