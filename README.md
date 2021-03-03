@@ -1,5 +1,7 @@
 # Helm Optimize Resource Plugin
 
+![Test Image 6](images/HL-helm-architecture.JPG)
+
 ### Introduction
 This is a helmV3 plugin to optimize your container resources (CPU/Memory Requests/Limits) by injecting optimal specifications, extracted from your choice of a parameter repository whenever helm is called to install or upgrade a chart.
 
