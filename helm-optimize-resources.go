@@ -21,6 +21,9 @@ var cluster string
 var namespace string
 var supportedObjTypes = []string{"CronJob", "DaemonSet", "Job", "ReplicaSet", "ReplicationController", "StatefulSet", "Deployment", "Pod"}
 
+//HelmBin location of helm installation
+var HelmBin string
+
 func printHowToUse() error {
 
 	content, err := ioutil.ReadFile(os.Getenv("HELM_PLUGIN_DIR") + "/plugin.yaml")
@@ -133,10 +136,13 @@ func processPluginSwitches(args []string) {
 
 func main() {
 
+	//set environment variables
+	HelmBin = os.Getenv("HELM_BIN")
+
 	args := os.Args[1:]
 
 	//Check general dependancies
-	if _, _, err := support.ExecuteSingleCommand([]string{"kubectl", "version"}); err != nil {
+	if _, _, err := support.ExecuteSingleCommand([]string{"kubectl"}); err != nil {
 		fmt.Println("kubectl is not installed, not in path or not configured correctly")
 		os.Exit(0)
 	}
@@ -153,7 +159,7 @@ func main() {
 	//if helm command is not install, upgrade or template, then just pass along to helm.
 	if args[0] != "install" && args[0] != "upgrade" {
 
-		stdOut, stdErr, err := support.ExecuteSingleCommand(append([]string{"helm"}, args...))
+		stdOut, stdErr, err := support.ExecuteSingleCommand(append([]string{HelmBin}, args...))
 		support.CheckError(stdErr, err, true)
 		fmt.Println(stdOut)
 		os.Exit(0)
@@ -173,18 +179,24 @@ func main() {
 		tempChartDir, err := ioutil.TempDir("", "")
 		support.CheckError("", err, true)
 
-		//copy chart to temporary directory
-		_, stdErr, err := support.ExecuteSingleCommand([]string{"cp", "-a", absChartPath, tempChartDir})
-		support.CheckError(stdErr, err, true)
+		//check to see if valid chart directory passed in.
+		//if not pull from repo
+		if support.FileExists(args[2] + "/Chart.yaml") {
+			_, stdErr, err := support.ExecuteSingleCommand([]string{"cp", "-a", absChartPath, tempChartDir})
+			support.CheckError(stdErr, err, true)
+		} else {
+			_, stdErr, err := support.ExecuteSingleCommand([]string{HelmBin, "pull", args[2], "--untar", "--untardir", tempChartDir})
+			support.CheckError(stdErr, err, true)
+		}
 
 		//render chart and output to temporary directory
-		_, stdErr, err = support.ExecuteSingleCommand(append(append([]string{"helm", "template"}, args[1:]...), "--output-dir", tempChartDir))
+		_, stdErr, err := support.ExecuteSingleCommand(append(append([]string{HelmBin, "template"}, args[1:]...), "--output-dir", tempChartDir))
 		support.CheckError(stdErr, err, true)
 
 		processChart(tempChartDir+"/"+chartDirName, args)
 
 		args[2] = tempChartDir + "/" + chartDirName
-		stdOut, stdErr, err := support.ExecuteSingleCommand(append([]string{"helm"}, args...))
+		stdOut, stdErr, err := support.ExecuteSingleCommand(append([]string{HelmBin}, args...))
 		support.CheckError(stdErr, err, true)
 
 		//delete temporary chart directory
@@ -200,13 +212,11 @@ func main() {
 func processChart(chartPath string, args []string) error {
 
 	charts, err := ioutil.ReadDir(chartPath + "/charts")
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	for _, chart := range charts {
-		if chart.IsDir() {
-			processChart(chartPath+"/charts/"+chart.Name(), args)
+	if err == nil {
+		for _, chart := range charts {
+			if chart.IsDir() {
+				processChart(chartPath+"/charts/"+chart.Name(), args)
+			}
 		}
 	}
 

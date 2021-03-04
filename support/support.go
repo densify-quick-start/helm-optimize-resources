@@ -12,7 +12,7 @@ import (
 	"os/exec"
 )
 
-//CheckError
+//CheckError will validate whether error is not nil
 func CheckError(message string, err error, exit bool) bool {
 	if err != nil {
 		if message != "" {
@@ -53,7 +53,15 @@ func RetrieveStoredSecret(secret string, name string) (string, error) {
 //ExecuteSingleCommand this function executes a given command.
 func ExecuteSingleCommand(command []string) (string, string, error) {
 
-	cmd := exec.Command(command[0], command[1:]...)
+	var cmd *exec.Cmd
+	if len(command) == 1 {
+		cmd = exec.Command(command[0])
+	} else if len(command) > 1 {
+		cmd = exec.Command(command[0], command[1:]...)
+	} else {
+		return "", "", errors.New("no command submitted")
+	}
+
 	stderr, _ := cmd.StderrPipe()
 	stdout, _ := cmd.StdoutPipe()
 
@@ -90,6 +98,14 @@ func FileExists(filename string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+func DirExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return info.IsDir()
 }
 
 //InSlice will check if an element exists in the slice
@@ -133,8 +149,8 @@ func DeleteFile(filepath string) error {
 
 }
 
-//HttpRequest send a REST api request to an end point
-func HttpRequest(method string, endpoint string, authStr string, body []byte) (string, error) {
+//HTTPRequest send a REST api request to an end point
+func HTTPRequest(method string, endpoint string, authStr string, body []byte) (string, error) {
 
 	auth := base64.StdEncoding.EncodeToString([]byte(authStr))
 	req, _ := http.NewRequest(method, endpoint, bytes.NewBuffer(body))
@@ -155,8 +171,8 @@ func HttpRequest(method string, endpoint string, authStr string, body []byte) (s
 
 	if resp.StatusCode == 200 {
 		return string(bodyBytes), nil
-	} else {
-		return "", errors.New(string(bodyBytes))
 	}
+
+	return "", errors.New(string(bodyBytes))
 
 }

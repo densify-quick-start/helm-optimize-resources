@@ -113,7 +113,7 @@ func Initialize() error {
 func GetInsight(cluster string, namespace string, objType string, objName string, containerName string) (map[string]map[string]string, error) {
 
 	if _, ok := insightCache[cluster]; !ok {
-		resp, err := support.HttpRequest("GET", densifyURL+analysisEP, densifyUser+":"+densifyPass, nil)
+		resp, err := support.HTTPRequest("GET", densifyURL+analysisEP, densifyUser+":"+densifyPass, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +122,7 @@ func GetInsight(cluster string, namespace string, objType string, objName string
 		json.Unmarshal([]byte(resp), &analyses)
 		for _, analysis := range analyses {
 			if analysis.(map[string]interface{})["analysisName"].(string) == cluster {
-				resp, err = support.HttpRequest("GET", densifyURL+analysisEP+"/"+analysis.(map[string]interface{})["analysisId"].(string)+"/results", densifyUser+":"+densifyPass, nil)
+				resp, err = support.HTTPRequest("GET", densifyURL+analysisEP+"/"+analysis.(map[string]interface{})["analysisId"].(string)+"/results", densifyUser+":"+densifyPass, nil)
 				if err != nil {
 					return nil, err
 				}
@@ -173,7 +173,7 @@ func validateSecrets() error {
 		return err
 	}
 
-	_, err = support.HttpRequest("POST", densifyURL+authorizeEP, densifyUser+":"+densifyPass, jsonReq)
+	_, err = support.HTTPRequest("POST", densifyURL+authorizeEP, densifyUser+":"+densifyPass, jsonReq)
 	if err != nil {
 		return err
 	}
