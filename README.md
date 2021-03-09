@@ -74,15 +74,23 @@ Available Commands:
 ```
 You can call the plugin by issuing commands in the following format.
 ```
-helm optimize [OPTION]
+helm optimize [OPTIONS]
 helm optimize [HELM COMMAND]
 ```
 ### Options
 To access plugin options use the following format.
 ```
-helm optimize [OPTION]
--c, --configure
-  use this command to invoke a wizard to configure the parameter repo adapter.
+helm optimize [OPTION] [(optional) SUB-OPTIONS...]
+-c (use this command to invoke a wizard to configure the parameter repo adapter.)
+  SUB-OPTIONS
+  --adapter (use this to manually configure adapter)
+  --cluster-mapping (use this to manually configure cluster mapping)
+  Eg. helm optimize -c --adapter
+  Eg. helm optimize -c --cluster-mapping
+
+-a <release_name> <chart_path/url> (use this to manage the approval settings through your configured repository)
+  Eg. helm optimize -a chart chart_path/
+  
 -h, --help, help
   use this to get more information about the optimize plugin for helm
 ```
