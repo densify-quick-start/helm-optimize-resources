@@ -1,5 +1,5 @@
 name: "optimize"
-version: "2.2.0"
+version: "2.3.0"
 usage: "optimize resource spec of running containers during an install or upgrade"
 description: |-
   Inject Densify insights (if available) into the resource specificiations of your running containers 
@@ -11,7 +11,8 @@ description: |-
     helm optimize [HELM COMMAND]
 
   OPTIONS:
-    -c [use this command to invoke a wizard to configure the plugin.]
+    -c
+    <use this command to invoke a wizard to configure the plugin>
       SUB-OPTIONS:
         --adapter [use this to configure the repo adapter]
         --cluster-mapping [use this to configure the cluster map]
@@ -19,10 +20,11 @@ description: |-
       Eg. helm optimize -c --cluster-mapping
 
     -a <release_name> <path_to_release>
+    <use this command to manage your approvals in the configured parameter repo> 
       Eg. helm optimize -a chart chart_path/ 
 
     -h, --help, help
-      use this to get more information about the optimize plugin for helm
+    <use this to get more information about the optimize plugin for helm>
 
   OPTIMIZATION
     Simply use helm as you normally would, but add the 'optimize' keyword before any command.
