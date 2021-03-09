@@ -64,6 +64,7 @@ get_latest_release() {
 
 # getDownloadURL checks the latest available version.
 getDownloadURL() {
+  echo $PROJECT_GH
   LATEST_VERSION = get_latest_release "densify-quick-start/helm-optimize-resources"
   echo $LATEST_VERSION
   DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/download/$LATEST_VERSION/helm-optimize-resources-$OS.tar.gz"
