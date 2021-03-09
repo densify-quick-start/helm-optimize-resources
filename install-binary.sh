@@ -55,9 +55,17 @@ verifySupported() {
   fi
 }
 
+# get the latest release version
+get_latest_release() {
+  curl --silent "https://api.github.com/repos/$1/releases/latest" | # Get latest release from GitHub api
+    grep '"tag_name":' |                                            # Get tag line
+    sed -E 's/.*"([^"]+)".*/\1/'                                    # Pluck JSON value
+}
+
 # getDownloadURL checks the latest available version.
 getDownloadURL() {
-  DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/download/latest/helm-optimize-resources-"$OS".tar.gz"
+  LATEST_VERSION=get_latest_release "densify-quick-start/helm-optimize-resources"
+  DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/download/$LATEST_VERSION/helm-optimize-resources-$OS.tar.gz"
 }
 
 # downloadFile downloads the latest binary package and also the checksum
