@@ -4,13 +4,46 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
+
+	"github.com/magiconair/properties"
 )
+
+//Config holds the configMap from the data forwarder
+var Config *properties.Properties = nil
+
+//LoadConfigMap loads the config map from the densify forwarder
+func LoadConfigMap() {
+
+	var stdOut, stdErr string
+	var err error
+	if stdOut, stdErr, err = ExecuteSingleCommand([]string{"kubectl", "get", "configmaps", "-A", "-o", "json"}); err != nil {
+		fmt.Println("unable to acquire densify config map: " + stdErr)
+	}
+
+	var configMaps map[string]interface{}
+	if err := json.Unmarshal([]byte(stdOut), &configMaps); err != nil {
+		fmt.Print("unable to acquire densify config map: ")
+		fmt.Println(err)
+	}
+
+	for _, configMap := range configMaps["items"].([]interface{}) {
+		if val, ok := configMap.(map[string]interface{})["data"].(map[string]interface{})["config.properties"]; ok && strings.Contains(val.(string), "Densify Inc. D/B/A Densify #  All Rights Reserved.") {
+			Config = properties.MustLoadString(val.(string))
+			return
+		}
+	}
+
+	fmt.Println("unable to acquire densify config map")
+
+}
 
 //CheckError will validate whether error is not nil
 func CheckError(message string, err error, exit bool) bool {
@@ -32,21 +65,51 @@ func RemoveSecret(name string) {
 	_, _, _ = ExecuteSingleCommand([]string{"kubectl", "delete", "secret", name, "--ignore-not-found"})
 }
 
-//RetrieveStoredSecret extract a secret stored within K8S.  Only in working namespace.
-func RetrieveStoredSecret(secret string, name string) (string, error) {
+//StoreSecrets stores the specified k8s secret
+func StoreSecrets(secretName string, secrets map[string]string) bool {
 
-	valueEncoded, stdErr, err := ExecuteSingleCommand([]string{"kubectl", "get", "secret", secret, "-o", "jsonpath='{.data." + name + "}'"})
-	if err != nil {
-		return "", errors.New(stdErr)
+	existingSecrets := RetrieveSecrets(secretName)
+	if existingSecrets == nil {
+		existingSecrets = make(map[string]string)
 	}
 
-	valueEncoded = valueEncoded[1 : len(valueEncoded)-1]
-	valueDecoded, err := base64.StdEncoding.DecodeString(valueEncoded)
-	if err != nil {
-		return "", err
+	for key, val := range secrets {
+		existingSecrets[key] = val
 	}
 
-	return string(valueDecoded), nil
+	createCmd := []string{"kubectl", "create", "secret", "generic", secretName}
+	for key, val := range existingSecrets {
+		createCmd = append(createCmd, "--from-literal="+key+"="+val)
+	}
+
+	RemoveSecret(secretName)
+	_, _, err := ExecuteSingleCommand(createCmd)
+	if err != nil {
+		return false
+	}
+
+	return true
+
+}
+
+//RetrieveSecrets will store the specified secret
+func RetrieveSecrets(secretName string) map[string]string {
+
+	stdOut, _, err := ExecuteSingleCommand([]string{"kubectl", "get", "secret", secretName, "-o", "jsonpath={.data}"})
+	if err != nil {
+		return nil
+	}
+
+	var secretsMapEncoded map[string]string
+	json.Unmarshal([]byte(stdOut), &secretsMapEncoded)
+
+	secretsMapDecoded := make(map[string]string)
+	for key, encodedVal := range secretsMapEncoded {
+		decodedVal, _ := base64.StdEncoding.DecodeString(encodedVal)
+		secretsMapDecoded[key] = string(decodedVal)
+	}
+
+	return secretsMapDecoded
 
 }
 
@@ -100,6 +163,7 @@ func FileExists(filename string) bool {
 	return !info.IsDir()
 }
 
+//DirExists checks to see if directory exists
 func DirExists(filename string) bool {
 	info, err := os.Stat(filename)
 	if os.IsNotExist(err) {

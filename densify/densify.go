@@ -58,64 +58,178 @@ var (
 	densifyPass string
 	analysisEP  = "/CIRBA/api/v2/analysis/containers/kubernetes"
 	authorizeEP = "/CIRBA/api/v2/authorize"
+	systemsEP   = "/CIRBA/api/v2/systems"
 )
 
 //Initialize will initilize the densify secrets k8s object, if it doesn't exist in the current-context.
 func Initialize() error {
 
-	_, err := support.RetrieveStoredSecret("optimize-plugin-secrets", "adapter")
-	if err != nil {
+	//check stored secret
+	storedSecrets := support.RetrieveSecrets("optimize-adapter-config")
+	if storedSecrets != nil && storedSecrets["adapter"] == "densify" {
+		densifyURL = storedSecrets["densifyURL"]
+		densifyUser = storedSecrets["densifyUser"]
+		densifyPass = storedSecrets["densifyPass"]
+		if err := validateSecrets(); err == nil {
+			return nil
+		}
+	}
 
+	//check data forwarder config map
+	if support.Config != nil {
+
+		var host, protocol, port string
+		var ok bool
+		if host, ok = support.Config.Get("host"); !ok {
+			return errors.New("could not extract host from densify data forwarder configMap")
+		}
+		if protocol, ok = support.Config.Get("protocol"); !ok {
+			return errors.New("could not extract protocol from densify data forwarder configMap")
+		}
+		if port, ok = support.Config.Get("port"); !ok {
+			return errors.New("could not extract port from densify data forwarder configMap")
+		}
+
+		densifyURL = protocol + "://" + host + ":" + port
+		fmt.Println("DensifyURL: " + densifyURL)
+
+	}
+
+	//if we can't resolve creds, then fetch from user
+	if densifyURL == "" {
 		fmt.Print("Densify URL: ")
 		fmt.Scanln(&densifyURL)
 		densifyURL = strings.TrimSuffix(densifyURL, "/")
-
-		fmt.Print("Densify Username: ")
-		fmt.Scanln(&densifyUser)
-
-		fmt.Print("Densify Password: ")
-		pass, _ := terminal.ReadPassword(0)
-		densifyPass = string(pass)
-		fmt.Println("")
-
-		_, stdErr, err := support.ExecuteSingleCommand([]string{"kubectl", "create", "secret", "generic", "optimize-plugin-secrets", "--from-literal=adapter=densify", "--from-literal=densifyURL=" + densifyURL, "--from-literal=densifyUser=" + densifyUser, "--from-literal=densifyPass=" + densifyPass})
-		if err != nil {
-			return errors.New(stdErr)
-		}
-
-	} else {
-
-		densifyURL, err = support.RetrieveStoredSecret("optimize-plugin-secrets", "densifyURL")
-		if err != nil {
-			return err
-		}
-
-		densifyUser, err = support.RetrieveStoredSecret("optimize-plugin-secrets", "densifyUser")
-		if err != nil {
-			return err
-		}
-		densifyPass, err = support.RetrieveStoredSecret("optimize-plugin-secrets", "densifyPass")
-		if err != nil {
-			return err
-		}
-
 	}
 
-	if err = validateSecrets(); err != nil {
+	fmt.Print("Densify Username: ")
+	fmt.Scanln(&densifyUser)
+
+	fmt.Print("Densify Password: ")
+	pass, _ := terminal.ReadPassword(0)
+	densifyPass = string(pass)
+	fmt.Println("")
+
+	if err := validateSecrets(); err != nil {
 		return err
 	}
+
+	storeSecrets()
 
 	return nil
 
 }
 
 //GetInsight gets an insight from densify based on the keys cluster, namespace, objType, objName and containerName
-func GetInsight(cluster string, namespace string, objType string, objName string, containerName string) (map[string]map[string]string, error) {
+func GetInsight(cluster string, namespace string, objType string, objName string, containerName string) (map[string]map[string]string, string, error) {
+
+	err := loadInsightCache(cluster)
+	if err != nil {
+		return nil, "", errors.New("unable to locate resource spec")
+	}
+
+	for _, insight := range insightCache[cluster] {
+
+		if insight.Cluster == cluster && insight.Namespace == namespace && insight.ControllerType == objType &&
+			insight.PodService == objName && insight.Container == containerName {
+
+			var insightObj = map[string]map[string]string{}
+			insightObj["limits"] = map[string]string{}
+			insightObj["requests"] = map[string]string{}
+
+			approvalSetting, _ := getAttribute(insight.EntityID, "attr_ApprovalSetting")
+
+			if approvalSetting == "Approve Specific Change" || approvalSetting == "Approve Any Change" {
+
+				insightObj["limits"]["cpu"] = strconv.Itoa(insight.RecommendedCPULimit) + "m"
+				insightObj["limits"]["memory"] = strconv.Itoa(insight.RecommendedMemLimit) + "Mi"
+				insightObj["requests"]["cpu"] = strconv.Itoa(insight.RecommendedCPURequest) + "m"
+				insightObj["requests"]["memory"] = strconv.Itoa(insight.RecommendedMemRequest) + "Mi"
+
+			} else if insight.CurrentCPULimit > 0 && insight.CurrentMemLimit > 0 && insight.CurrentCPURequest > 0 && insight.CurrentMemRequest > 0 {
+
+				insightObj["limits"]["cpu"] = strconv.Itoa(insight.CurrentCPULimit) + "m"
+				insightObj["limits"]["memory"] = strconv.Itoa(insight.CurrentMemLimit) + "Mi"
+				insightObj["requests"]["cpu"] = strconv.Itoa(insight.CurrentCPURequest) + "m"
+				insightObj["requests"]["memory"] = strconv.Itoa(insight.CurrentMemRequest) + "Mi"
+
+			} else {
+
+				return nil, "", errors.New("invalid resource specs received from repository")
+
+			}
+
+			return insightObj, approvalSetting, nil
+
+		}
+
+	}
+
+	return nil, "", errors.New("unable to locate resource spec")
+
+}
+
+//UpdateApprovalSetting this will update the approval status for a specific recommendation
+func UpdateApprovalSetting(approved bool, cluster string, namespace string, objType string, objName string, containerName string) error {
+
+	err := loadInsightCache(cluster)
+	if err != nil {
+		return errors.New("unable to update approval setting")
+	}
+
+	var entityID string
+	for _, insight := range insightCache[cluster] {
+
+		if insight.Cluster == cluster && insight.Namespace == namespace && insight.ControllerType == objType && insight.PodService == objName && insight.Container == containerName {
+
+			entityID = insight.EntityID
+
+		}
+
+	}
+
+	if approved == true {
+		_, err = support.HTTPRequest("PUT", densifyURL+systemsEP+"/"+entityID+"/attributes", densifyUser+":"+densifyPass, []byte("[{\"name\": \"Approval Setting\", \"value\": \"Approve Specific Change\"}]"))
+	} else {
+		_, err = support.HTTPRequest("PUT", densifyURL+systemsEP+"/"+entityID+"/attributes", densifyUser+":"+densifyPass, []byte("[{\"name\": \"Approval Setting\", \"value\": \"Not Approved\"}]"))
+	}
+
+	return err
+
+}
+
+//GetApprovalSetting this will update the approval status for a specific recommendation
+func GetApprovalSetting(cluster string, namespace string, objType string, objName string, containerName string) (string, error) {
+
+	err := loadInsightCache(cluster)
+	if err != nil {
+		return "", errors.New("unable to read approval setting")
+	}
+
+	for _, insight := range insightCache[cluster] {
+
+		if insight.Cluster == cluster && insight.Namespace == namespace && insight.ControllerType == objType && insight.PodService == objName && insight.Container == containerName {
+
+			approvalSetting, err := getAttribute(insight.EntityID, "attr_ApprovalSetting")
+			if err != nil {
+				return "", err
+			}
+			return approvalSetting, nil
+
+		}
+
+	}
+
+	return "", errors.New("unable to read approval setting")
+
+}
+
+func loadInsightCache(cluster string) error {
 
 	if _, ok := insightCache[cluster]; !ok {
 		resp, err := support.HTTPRequest("GET", densifyURL+analysisEP, densifyUser+":"+densifyPass, nil)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		var analyses []interface{}
 		found := false
@@ -124,7 +238,7 @@ func GetInsight(cluster string, namespace string, objType string, objName string
 			if analysis.(map[string]interface{})["analysisName"].(string) == cluster {
 				resp, err = support.HTTPRequest("GET", densifyURL+analysisEP+"/"+analysis.(map[string]interface{})["analysisId"].(string)+"/results", densifyUser+":"+densifyPass, nil)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				var insights []Insight
@@ -135,31 +249,30 @@ func GetInsight(cluster string, namespace string, objType string, objName string
 			}
 		}
 		if found == false {
-			return nil, errors.New("unable to locate insight in densify")
+			return errors.New("unable to locate resource spec")
 		}
 	}
 
-	for _, insight := range insightCache[cluster] {
+	return nil
 
-		if insight.Cluster == cluster && insight.Namespace == namespace && insight.ControllerType == objType &&
-			insight.PodService == objName && insight.Container == containerName && insight.RecommendedCPULimit > 0 &&
-			insight.RecommendedCPURequest > 0 && insight.RecommendedMemLimit > 0 && insight.RecommendedMemRequest > 0 {
+}
 
-			var insightObj = map[string]map[string]string{}
-			insightObj["limits"] = map[string]string{}
-			insightObj["requests"] = map[string]string{}
+func getAttribute(entityID string, attrID string) (string, error) {
 
-			insightObj["limits"]["cpu"] = strconv.Itoa(insight.RecommendedCPULimit) + "m"
-			insightObj["limits"]["memory"] = strconv.Itoa(insight.RecommendedMemLimit) + "Mi"
-			insightObj["requests"]["cpu"] = strconv.Itoa(insight.RecommendedCPURequest) + "m"
-			insightObj["requests"]["memory"] = strconv.Itoa(insight.RecommendedMemRequest) + "Mi"
-
-			return insightObj, nil
-		}
-
+	resp, err := support.HTTPRequest("GET", densifyURL+systemsEP+"/"+entityID, densifyUser+":"+densifyPass, nil)
+	if err != nil {
+		return "", errors.New("error locating attribute[" + attrID + "]")
 	}
 
-	return nil, errors.New("unable to locate insight in densify")
+	var respMap map[string]interface{}
+	json.Unmarshal([]byte(resp), &respMap)
+
+	for _, val := range respMap["attributes"].([]interface{}) {
+		if val.(map[string]interface{})["id"] == attrID {
+			return val.(map[string]interface{})["value"].(string), nil
+		}
+	}
+	return "Not Approved", nil
 
 }
 
@@ -179,5 +292,16 @@ func validateSecrets() error {
 	}
 
 	return nil
+
+}
+
+func storeSecrets() {
+
+	storeSecrets := make(map[string]string)
+	storeSecrets["adapter"] = "densify"
+	storeSecrets["densifyURL"] = densifyURL
+	storeSecrets["densifyUser"] = densifyUser
+	storeSecrets["densifyPass"] = densifyPass
+	support.StoreSecrets("optimize-adapter-config", storeSecrets)
 
 }
