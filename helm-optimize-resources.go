@@ -349,6 +349,12 @@ func main() {
 		_, stdErr, err := support.ExecuteSingleCommand(append(append([]string{HelmBin}, args...), "--dry-run"))
 		support.CheckError(stdErr, err, true)
 
+		if strings.HasPrefix(args[1], "-") || strings.HasPrefix(args[2], "-") {
+			fmt.Println("please ensure the helm release name and chart are specified before any flags")
+			fmt.Println("eg. helm optimize " + args[0] + " [NAME] [CHART] [flags]")
+			os.Exit(0)
+		}
+
 		fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
 		fmt.Println("LOCAL CLUSTER: " + localCluster)
 		fmt.Println("REMOTE CLUSTER: " + remoteCluster)
