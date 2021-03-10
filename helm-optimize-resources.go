@@ -16,10 +16,12 @@ import (
 	"github.com/ghodss/yaml"
 )
 
-var availableAdapters = [][]string{{"densify", "Densify"}, {"ssm", "Parameter Store"}}
+//VARIABLE DECLARATIONS
+var availableAdapters = map[int]string{
+	1: "Densify",
+	2: "Parameter Store",
+}
 var adapter string
-
-//var cluster string
 var localCluster string
 var remoteCluster string
 var namespace string
@@ -35,45 +37,35 @@ var objTypeContainerPath = map[string]string{
 }
 
 //HelmBin location of helm installation
-var HelmBin string
+var HelmBin string = os.Getenv("HELM_BIN")
 
-func printHowToUse() error {
+//KubectlBin location of kubectl installation
+var KubectlBin string = "kubectl"
 
-	content, err := ioutil.ReadFile(os.Getenv("HELM_PLUGIN_DIR") + "/plugin.yaml")
-	support.CheckError("", err, true)
-
-	var pluginYAML map[string]interface{}
-	yaml.Unmarshal(content, &pluginYAML)
-	fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
-	fmt.Println("NAME: Optimize Plugin")
-	fmt.Println("VERSION: " + pluginYAML["version"].(string))
-	fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
-	fmt.Println(pluginYAML["description"].(string))
-	fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
-
-	return nil
-
-}
+////////////////////////////////////////////////////////
+/////////////////ADAPTER FUNCTIONS//////////////////////
+////////////////////////////////////////////////////////
 
 func initializeAdapter() error {
 
-	if val, ok := support.RetrieveSecrets("optimize-adapter-config")["adapter"]; ok {
-		adapter = val
-	} else if adapter == "" {
-		adapter = "densify"
+	if adapter == "" {
+		if val, ok := support.RetrieveSecrets("helm-optimize-plugin")["adapter"]; ok {
+			adapter = val
+		} else if adapter == "" {
+			adapter = "Densify"
+		}
 	}
 
 	var err error
 	switch adapter {
-	case "densify":
+	case "Densify":
 		err = densify.Initialize()
-	case "ssm":
+	case "Parameter Store":
 		err = ssm.Initialize()
 	}
 
 	if err != nil {
 		fmt.Println(err)
-		support.RemoveSecret("optimize-plugin-secrets")
 		var tryAgain string
 		fmt.Print("Would you like to try again (y/n): ")
 		fmt.Scanln(&tryAgain)
@@ -93,9 +85,9 @@ func getInsight(cluster string, namespace string, objType string, objName string
 	var err error
 
 	switch adapter {
-	case "densify":
+	case "Densify":
 		insight, approvalSetting, err = densify.GetInsight(cluster, namespace, objType, objName, containerName)
-	case "ssm":
+	case "Parameter Store":
 		insight, approvalSetting, err = ssm.GetInsight(cluster, namespace, objType, objName, containerName)
 	}
 
@@ -112,9 +104,9 @@ func updateApprovalSetting(approved bool, cluster string, namespace string, objT
 	var err error
 
 	switch adapter {
-	case "densify":
+	case "Densify":
 		err = densify.UpdateApprovalSetting(approved, cluster, namespace, objType, objName, containerName)
-	case "ssm":
+	case "Parameter Store":
 		err = ssm.UpdateApprovalSetting(approved, cluster, namespace, objType, objName, containerName)
 	}
 
@@ -128,9 +120,9 @@ func getApprovalSetting(cluster string, namespace string, objType string, objNam
 	var err error
 
 	switch adapter {
-	case "densify":
+	case "Densify":
 		approvalSetting, err = densify.GetApprovalSetting(cluster, namespace, objType, objName, containerName)
-	case "ssm":
+	case "Parameter Store":
 		approvalSetting, err = ssm.GetApprovalSetting(cluster, namespace, objType, objName, containerName)
 	}
 
@@ -138,13 +130,19 @@ func getApprovalSetting(cluster string, namespace string, objType string, objNam
 
 }
 
+////////////////////////////////////////////////////////
+/////////////////SUPPORTING FUNCTIONS///////////////////
+////////////////////////////////////////////////////////
+
 func selectAdapter() {
 
 	//get adapter selection from user
 	for {
 		fmt.Println("Select Adapter")
-		for i, val := range availableAdapters {
-			fmt.Println("  " + strconv.Itoa(i+1) + ". " + val[1])
+		i := 1
+		for range availableAdapters {
+			fmt.Println("  " + strconv.Itoa(i) + ". " + availableAdapters[i])
+			i++
 		}
 		fmt.Print("Selection: ")
 
@@ -157,7 +155,7 @@ func selectAdapter() {
 			fmt.Println("Incorrect adapter selection.  Try again.")
 			continue
 		}
-		adapter = availableAdapters[userSelection-1][0]
+		adapter = availableAdapters[userSelection]
 		break
 	}
 
@@ -174,7 +172,6 @@ func processPluginSwitches(args []string) {
 	if args[0] == "-c" && len(args) == 2 {
 		//Check if user is configuring adapter
 		if args[1] == "--adapter" {
-			support.RemoveSecret("optimize-adapter-config")
 			selectAdapter()
 			initializeAdapter()
 			os.Exit(0)
@@ -182,15 +179,13 @@ func processPluginSwitches(args []string) {
 
 		//Check if user is configuring adapter
 		if args[1] == "--cluster-mapping" {
-			support.RemoveSecret("optimize-cluster-mapping")
+			remoteCluster = ""
 			fmt.Print("Please specify remote cluster [" + localCluster + "]: ")
 			fmt.Scanln(&remoteCluster)
 			if remoteCluster == "" {
 				remoteCluster = localCluster
 			}
-			localClusterSecret := make(map[string]string)
-			localClusterSecret["remoteCluster"] = remoteCluster
-			support.StoreSecrets("optimize-cluster-mapping", localClusterSecret)
+			support.StoreSecrets("helm-optimize-plugin", map[string]string{"remoteCluster": remoteCluster})
 			os.Exit(0)
 		}
 	}
@@ -198,7 +193,6 @@ func processPluginSwitches(args []string) {
 	if args[0] == "-a" && len(args) > 2 {
 
 		if err := initializeAdapter(); err != nil {
-			fmt.Println(err)
 			os.Exit(0)
 		}
 
@@ -213,6 +207,14 @@ func processPluginSwitches(args []string) {
 
 			var manifestMap map[string]interface{}
 			yaml.Unmarshal([]byte(manifest), &manifestMap)
+
+			if _, ok := manifestMap["metadata"]; ok {
+				if _, ok := manifestMap["metadata"].(map[string]interface{})["annotations"]; ok {
+					if helmTest, ok := manifestMap["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})["helm.sh/hook"]; ok && strings.HasPrefix(helmTest.(string), "test") {
+						continue
+					}
+				}
+			}
 
 			if objType, ok := manifestMap["kind"]; ok {
 
@@ -279,31 +281,56 @@ func processPluginSwitches(args []string) {
 
 }
 
-func main() {
+func printHowToUse() error {
 
-	//set environment variables3
-	HelmBin = os.Getenv("HELM_BIN")
-	args := os.Args[1:]
+	content, err := ioutil.ReadFile(os.Getenv("HELM_PLUGIN_DIR") + "/plugin.yaml")
+	support.CheckError("", err, true)
 
-	//Check general dependancies
-	if _, _, err := support.ExecuteSingleCommand([]string{"kubectl"}); err != nil {
-		fmt.Println("kubectl is not installed, not in path or not configured correctly")
-		os.Exit(0)
+	var pluginYAML map[string]interface{}
+	yaml.Unmarshal(content, &pluginYAML)
+	fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
+	fmt.Println("NAME: Optimize Plugin")
+	fmt.Println("VERSION: " + pluginYAML["version"].(string))
+	fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
+	fmt.Println(pluginYAML["description"].(string))
+	fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
+
+	return nil
+
+}
+
+func checkGeneralDependancies() {
+
+	for {
+		if _, _, err := support.ExecuteSingleCommand([]string{KubectlBin}); err != nil {
+			fmt.Print("[" + KubectlBin + "] is not available -- enter new path: ")
+			fmt.Scanln(&KubectlBin)
+			fmt.Println("")
+		} else {
+			if stdOut, stdErr, err := support.ExecuteSingleCommand([]string{KubectlBin, "cluster-info"}); err != nil {
+				fmt.Println(stdOut)
+				fmt.Println(stdErr)
+				os.Exit(0)
+			}
+			support.KubectlBin = KubectlBin
+			break
+		}
 	}
 
-	//load configMap
-	support.LoadConfigMap()
+}
 
-	//interpolate context
+func main() {
+
+	//set environment variables
+	args := os.Args[1:]
+
+	checkGeneralDependancies()
 	interpolateContext()
-
-	//Process any plugin switches
 	processPluginSwitches(args)
 
 	//initialize the adapter
 	if adapter == "" {
 		if err := initializeAdapter(); err != nil {
-			fmt.Println(err)
 			os.Exit(0)
 		}
 	}
@@ -463,7 +490,7 @@ func extractResourceSpecFromK8S(cluster string, objNamespace string, objType str
 
 	jsonPath := objTypeContainerPath[objType]
 
-	stdOut, stdErr, err := support.ExecuteSingleCommand([]string{"kubectl", "get", objType, objName, "-o=jsonpath=" + jsonPath, "--cluster=" + cluster, "--namespace=" + objNamespace})
+	stdOut, stdErr, err := support.ExecuteSingleCommand([]string{KubectlBin, "get", objType, objName, "-o=jsonpath=" + jsonPath, "--cluster=" + cluster, "--namespace=" + objNamespace})
 	if err != nil {
 		return nil, errors.New(stdErr)
 	}
@@ -505,7 +532,7 @@ func interpolateContext() {
 	if kubeconfig != "" {
 		kubeconfig, stdErr, err = support.ExecuteSingleCommand([]string{"cat", kubeconfig})
 	} else {
-		kubeconfig, stdErr, err = support.ExecuteSingleCommand([]string{"kubectl", "config", "view"})
+		kubeconfig, stdErr, err = support.ExecuteSingleCommand([]string{KubectlBin, "config", "view"})
 	}
 	support.CheckError(stdErr, err, true)
 
@@ -526,20 +553,23 @@ func interpolateContext() {
 		}
 	}
 
-	if val, ok := support.RetrieveSecrets("optimize-cluster-mapping")["remoteCluster"]; ok {
+	if val, ok := support.RetrieveSecrets("helm-optimize-plugin")["remoteCluster"]; ok {
 		remoteCluster = val
 	} else {
+
+		support.LoadConfigMap()
 		if support.Config != nil {
 			if clusterName, ok := support.Config.Get("cluster_name"); ok {
 				remoteCluster = clusterName
 			} else if clusterName, ok := support.Config.Get("prometheus_address"); ok {
 				remoteCluster = clusterName
 			}
+		} else {
+			fmt.Println("could not resolve remote cluster -- please configure manually using 'helm optimize -c --cluster-mapping'")
+			os.Exit(0)
 		}
 
-		if remoteCluster == "" {
-			processPluginSwitches([]string{"-c", "--cluster-mapping"})
-		}
+		support.StoreSecrets("helm-optimize-plugin", map[string]string{"remoteCluster": remoteCluster})
 
 	}
 

@@ -18,6 +18,10 @@ var (
 
 var supportedRegions = []string{"us-east-2", "us-east-1", "us-west-1", "us-west-2", "af-south-1", "ap-east-1", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-southeast-1", "ap-southeast-2", "ap-northeast-1", "ca-central-1", "cn-north-1", "cn-northwest-1", "eu-central-1", "eu-west-1", "eu-west-2", "eu-south-1", "eu-west-3", "eu-north-1", "me-south-1", "sa-east-1", "us-gov-east-1", "us-gov-west-1"}
 
+////////////////////////////////////////////////////////
+////////////////EXTERNAL FUNCTIONS//////////////////////
+////////////////////////////////////////////////////////
+
 //Initialize will ready the adapter to serve insight extraction from AWS parameter store.
 func Initialize() error {
 
@@ -27,12 +31,14 @@ func Initialize() error {
 	}
 
 	//check stored secret
-	storedSecrets := support.RetrieveSecrets("optimize-adapter-config")
-	if storedSecrets != nil && storedSecrets["adapter"] == "ssm" {
-		region = storedSecrets["region"]
-		prefix = storedSecrets["prefix"]
-		profile = storedSecrets["profile"]
-		return nil
+	storedSecrets := support.RetrieveSecrets("helm-optimize-plugin")
+	if storedSecrets != nil && storedSecrets["adapter"] == "Parameter Store" {
+		if _, ok := storedSecrets["region"]; ok {
+			region = storedSecrets["region"]
+			prefix = storedSecrets["prefix"]
+			profile = storedSecrets["profile"]
+			return nil
+		}
 	}
 
 	//extract ssm secrets from user
@@ -84,56 +90,34 @@ func Initialize() error {
 
 }
 
-//GetInsight gets an insight from densify based on the keys cluster, namespace, objType, objName and containerName
+//GetInsight gets an insight from parameter store based on the keys cluster, namespace, objType, objName and containerName
 func GetInsight(cluster string, namespace string, objType string, objName string, containerName string) (map[string]map[string]string, string, error) {
 
 	ssmKey := prefix + "/" + cluster + "/" + namespace + "/" + objType + "/" + objName + "/" + containerName + "/resourceSpec"
 
-	insight, _, err := support.ExecuteSingleCommand([]string{"aws", "ssm", "get-parameter", "--with-decryption", "--name", ssmKey, "--profile", profile, "--region", region})
+	insight, insightVersion, err := getParameterValue(ssmKey)
 	if err != nil {
 		return nil, "", errors.New("could not locate resource spec")
 	}
 
-	var insightMap map[string]map[string]interface{}
-	json.Unmarshal([]byte(insight), &insightMap)
-
-	insight = insightMap["Parameter"]["Value"].(string)
-	insightVersion := insightMap["Parameter"]["Version"]
-
-	//acquire resource spec
+	//Validate and acquire resource spec
 	var parsedInsight map[string]map[string]string
 	json.Unmarshal([]byte(insight), &parsedInsight)
 
 	if cpuLimit, err := strconv.Atoi(parsedInsight["limits"]["cpu"]); err != nil || cpuLimit < 1 {
-		if err != nil {
-			return nil, "", errors.New("could not locate resource spec")
-		} else {
-			return nil, "", errors.New("invalid resource specs received from repository")
-		}
+		return nil, "", errors.New("invalid resource specs received from repository")
 	}
 
 	if memLimit, err := strconv.Atoi(parsedInsight["limits"]["memory"]); err != nil || memLimit < 1 {
-		if err != nil {
-			return nil, "", errors.New("could not locate resource spec")
-		} else {
-			return nil, "", errors.New("invalid resource specs received from repository")
-		}
+		return nil, "", errors.New("invalid resource specs received from repository")
 	}
 
 	if cpuRequest, err := strconv.Atoi(parsedInsight["requests"]["cpu"]); err != nil || cpuRequest < 1 {
-		if err != nil {
-			return nil, "", errors.New("could not locate resource spec")
-		} else {
-			return nil, "", errors.New("invalid resource specs received from repository")
-		}
+		return nil, "", errors.New("invalid resource specs received from repository")
 	}
 
 	if memRequest, err := strconv.Atoi(parsedInsight["requests"]["memory"]); err != nil || memRequest < 1 {
-		if err != nil {
-			return nil, "", errors.New("could not locate resource spec")
-		} else {
-			return nil, "", errors.New("invalid resource specs received from repository")
-		}
+		return nil, "", errors.New("invalid resource specs received from repository")
 	}
 
 	parsedInsight["limits"]["cpu"] = parsedInsight["limits"]["cpu"] + "m"
@@ -142,24 +126,16 @@ func GetInsight(cluster string, namespace string, objType string, objName string
 	parsedInsight["requests"]["memory"] = parsedInsight["requests"]["memory"] + "Mi"
 
 	//Acquire approval setting
-	paramHistory, _, err := support.ExecuteSingleCommand([]string{"aws", "ssm", "get-parameter-history", "--with-decryption", "--name", ssmKey, "--profile", profile, "--region", region, "--query", "Parameters"})
+	approvalSetting, err := getParameterLabel(ssmKey, insightVersion)
 	if err != nil {
-		return nil, "", errors.New("could not locate resource spec")
+		return nil, "", errors.New("unable to read approval setting")
 	}
 
-	var paramHistoryMap []map[string]interface{}
-	json.Unmarshal([]byte(paramHistory), &paramHistoryMap)
-	for _, val := range paramHistoryMap {
-		if val["Version"] == insightVersion && len(val["Labels"].([]interface{})) == 1 {
-			return parsedInsight, val["Labels"].([]interface{})[0].(string), nil
-		}
-	}
-
-	return nil, "", errors.New("could not locate resource spec")
+	return parsedInsight, approvalSetting, nil
 
 }
 
-//UpdateApprovalSetting update
+//UpdateApprovalSetting will update the approval setting accordingly
 func UpdateApprovalSetting(approved bool, cluster string, namespace string, objType string, objName string, containerName string) error {
 
 	ssmKey := prefix + "/" + cluster + "/" + namespace + "/" + objType + "/" + objName + "/" + containerName + "/resourceSpec"
@@ -198,61 +174,75 @@ func UpdateApprovalSetting(approved bool, cluster string, namespace string, objT
 		}
 	}
 
-	currentSettingsByte, err := json.Marshal(currentSettings)
-	if err != nil {
-		return errors.New("unable to update approval setting")
-	}
-	recommendedSettingsByte, err := json.Marshal(recommendedSettings)
-	if err != nil {
-		return errors.New("unable to update approval setting")
-	}
-
-	currentSettingsJSON := string(currentSettingsByte)
-	recommendedSettingsJSON := string(recommendedSettingsByte)
-
+	var err1, err2 error
 	if approved == true {
-		_, _, err := support.ExecuteSingleCommand([]string{"aws", "ssm", "put-parameter", "--name", ssmKey, "--type", "String", "--value", recommendedSettingsJSON, "--overwrite", "--profile", profile, "--region", region})
+		recommendedSettingsJSON, err := json.Marshal(recommendedSettings)
 		if err != nil {
 			return errors.New("unable to update approval setting")
 		}
-		_, _, err = support.ExecuteSingleCommand([]string{"aws", "ssm", "label-parameter-version", "--name", ssmKey, "--labels", "Approved", "--profile", profile, "--region", region})
-		if err != nil {
-			return errors.New("unable to update approval setting")
+		_, _, err1 = support.ExecuteSingleCommand([]string{"aws", "ssm", "put-parameter", "--name", ssmKey, "--type", "String", "--value", string(recommendedSettingsJSON), "--overwrite", "--profile", profile, "--region", region})
+		if err1 == nil {
+			_, _, err2 = support.ExecuteSingleCommand([]string{"aws", "ssm", "label-parameter-version", "--name", ssmKey, "--labels", "Approved", "--profile", profile, "--region", region})
 		}
-
 	} else {
-		_, _, err := support.ExecuteSingleCommand([]string{"aws", "ssm", "put-parameter", "--name", ssmKey, "--type", "String", "--value", currentSettingsJSON, "--overwrite", "--profile", profile, "--region", region})
+		currentSettingsJSON, err := json.Marshal(currentSettings)
 		if err != nil {
 			return errors.New("unable to update approval setting")
 		}
-		resp, _, err = support.ExecuteSingleCommand([]string{"aws", "ssm", "label-parameter-version", "--name", ssmKey, "--labels", "NotApproved", "--profile", profile, "--region", region})
-		if err != nil {
-			return errors.New("unable to update approval setting")
+		_, _, err1 = support.ExecuteSingleCommand([]string{"aws", "ssm", "put-parameter", "--name", ssmKey, "--type", "String", "--value", string(currentSettingsJSON), "--overwrite", "--profile", profile, "--region", region})
+		if err1 == nil {
+			_, _, err2 = support.ExecuteSingleCommand([]string{"aws", "ssm", "label-parameter-version", "--name", ssmKey, "--labels", "NotApproved", "--profile", profile, "--region", region})
 		}
+	}
 
+	if err1 != nil || err2 != nil {
+		return errors.New("unable to update approval setting")
 	}
 
 	return nil
 
 }
 
-//GetApprovalSetting get
+//GetApprovalSetting will acquire the current approval setting
 func GetApprovalSetting(cluster string, namespace string, objType string, objName string, containerName string) (string, error) {
 
 	ssmKey := prefix + "/" + cluster + "/" + namespace + "/" + objType + "/" + objName + "/" + containerName + "/resourceSpec"
 
-	insight, _, err := support.ExecuteSingleCommand([]string{"aws", "ssm", "get-parameter", "--with-decryption", "--name", ssmKey, "--profile", profile, "--region", region})
+	_, insightVersion, err := getParameterValue(ssmKey)
 	if err != nil {
 		return "", errors.New("unable to read approval setting")
+	}
+
+	//Acquire approval setting
+	approvalSetting, err := getParameterLabel(ssmKey, insightVersion)
+	if err != nil {
+		return "", errors.New("unable to read approval setting")
+	}
+
+	return approvalSetting, nil
+
+}
+
+////////////////////////////////////////////////////////
+///////////////////LOCAL FUNCTIONS//////////////////////
+////////////////////////////////////////////////////////
+
+func getParameterValue(ssmKey string) (string, string, error) {
+
+	insight, _, err := support.ExecuteSingleCommand([]string{"aws", "ssm", "get-parameter", "--with-decryption", "--name", ssmKey, "--profile", profile, "--region", region})
+	if err != nil {
+		return "", "", errors.New("could not locate resource spec")
 	}
 
 	var insightMap map[string]map[string]interface{}
 	json.Unmarshal([]byte(insight), &insightMap)
 
-	insight = insightMap["Parameter"]["Value"].(string)
-	insightVersion := insightMap["Parameter"]["Version"]
+	return insightMap["Parameter"]["Value"].(string), strconv.FormatFloat(insightMap["Parameter"]["Version"].(float64), 'E', -1, 64), nil
 
-	//Acquire approval setting
+}
+
+func getParameterLabel(ssmKey string, version string) (string, error) {
+
 	paramHistory, _, err := support.ExecuteSingleCommand([]string{"aws", "ssm", "get-parameter-history", "--with-decryption", "--name", ssmKey, "--profile", profile, "--region", region, "--query", "Parameters"})
 	if err != nil {
 		return "", errors.New("unable to read approval setting")
@@ -261,7 +251,7 @@ func GetApprovalSetting(cluster string, namespace string, objType string, objNam
 	var paramHistoryMap []map[string]interface{}
 	json.Unmarshal([]byte(paramHistory), &paramHistoryMap)
 	for _, val := range paramHistoryMap {
-		if val["Version"] == insightVersion && len(val["Labels"].([]interface{})) == 1 {
+		if strconv.FormatFloat(val["Version"].(float64), 'E', -1, 64) == version && len(val["Labels"].([]interface{})) == 1 {
 			if val["Labels"].([]interface{})[0].(string) == "NotApproved" {
 				return "Not Approved", nil
 			}
@@ -269,17 +259,17 @@ func GetApprovalSetting(cluster string, namespace string, objType string, objNam
 		}
 	}
 
-	return "", errors.New("unable to read approval setting")
+	return "", errors.New("unable to read parameter label")
 
 }
 
 func storeSecrets() {
 
 	secrets := make(map[string]string)
-	secrets["adapter"] = "ssm"
+	secrets["adapter"] = "Parameter Store"
 	secrets["profile"] = profile
 	secrets["prefix"] = prefix
 	secrets["region"] = region
-	support.StoreSecrets("optimize-adapter-config", secrets)
+	support.StoreSecrets("helm-optimize-plugin", secrets)
 
 }

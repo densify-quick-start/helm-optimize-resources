@@ -11,7 +11,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
-var insightCache = make(map[string][]Insight)
+var insightCache = make(map[string]Insight)
 
 //Insight this struct holds a recommendation
 type Insight struct {
@@ -61,21 +61,29 @@ var (
 	systemsEP   = "/CIRBA/api/v2/systems"
 )
 
+////////////////////////////////////////////////////////
+////////////////EXTERNAL FUNCTIONS//////////////////////
+////////////////////////////////////////////////////////
+
 //Initialize will initilize the densify secrets k8s object, if it doesn't exist in the current-context.
 func Initialize() error {
 
 	//check stored secret
-	storedSecrets := support.RetrieveSecrets("optimize-adapter-config")
-	if storedSecrets != nil && storedSecrets["adapter"] == "densify" {
-		densifyURL = storedSecrets["densifyURL"]
-		densifyUser = storedSecrets["densifyUser"]
-		densifyPass = storedSecrets["densifyPass"]
-		if err := validateSecrets(); err == nil {
-			return nil
+	storedSecrets := support.RetrieveSecrets("helm-optimize-plugin")
+	if storedSecrets != nil && storedSecrets["adapter"] == "Densify" {
+		if _, ok := storedSecrets["densifyURL"]; ok {
+			densifyURL = storedSecrets["densifyURL"]
+			densifyUser = storedSecrets["densifyUser"]
+			densifyPass = storedSecrets["densifyPass"]
+
+			if err := validateSecrets(); err == nil {
+				return nil
+			}
 		}
 	}
 
-	//check data forwarder config map
+	//resolve creds from data forwarder
+	support.LoadConfigMap()
 	if support.Config != nil {
 
 		var host, protocol, port string
@@ -111,6 +119,9 @@ func Initialize() error {
 	fmt.Println("")
 
 	if err := validateSecrets(); err != nil {
+		support.RemoveSecretData("helm-optimize-plugin", "densifyURL")
+		support.RemoveSecretData("helm-optimize-plugin", "densifyUser")
+		support.RemoveSecretData("helm-optimize-plugin", "densifyPass")
 		return err
 	}
 
@@ -123,75 +134,58 @@ func Initialize() error {
 //GetInsight gets an insight from densify based on the keys cluster, namespace, objType, objName and containerName
 func GetInsight(cluster string, namespace string, objType string, objName string, containerName string) (map[string]map[string]string, string, error) {
 
-	err := loadInsightCache(cluster)
-	if err != nil {
+	insight, err := lookupInsight(cluster, namespace, objType, objName, containerName)
+	if insight.Container == "" || err != nil {
 		return nil, "", errors.New("unable to locate resource spec")
 	}
 
-	for _, insight := range insightCache[cluster] {
+	var insightObj = map[string]map[string]string{}
+	insightObj["limits"] = map[string]string{}
+	insightObj["requests"] = map[string]string{}
 
-		if insight.Cluster == cluster && insight.Namespace == namespace && insight.ControllerType == objType &&
-			insight.PodService == objName && insight.Container == containerName {
+	approvalSetting, err := getAttribute(insight.EntityID, "attr_ApprovalSetting")
+	if err != nil {
+		approvalSetting = "Not Approved"
+	}
 
-			var insightObj = map[string]map[string]string{}
-			insightObj["limits"] = map[string]string{}
-			insightObj["requests"] = map[string]string{}
+	if approvalSetting != "Not Approved" && insight.RecommendedCPULimit > 0 && insight.RecommendedMemLimit > 0 && insight.RecommendedCPURequest > 0 && insight.RecommendedMemRequest > 0 {
 
-			approvalSetting, _ := getAttribute(insight.EntityID, "attr_ApprovalSetting")
+		approvalSetting = "Approved"
 
-			if approvalSetting == "Approve Specific Change" || approvalSetting == "Approve Any Change" {
+		insightObj["limits"]["cpu"] = strconv.Itoa(insight.RecommendedCPULimit) + "m"
+		insightObj["limits"]["memory"] = strconv.Itoa(insight.RecommendedMemLimit) + "Mi"
+		insightObj["requests"]["cpu"] = strconv.Itoa(insight.RecommendedCPURequest) + "m"
+		insightObj["requests"]["memory"] = strconv.Itoa(insight.RecommendedMemRequest) + "Mi"
 
-				insightObj["limits"]["cpu"] = strconv.Itoa(insight.RecommendedCPULimit) + "m"
-				insightObj["limits"]["memory"] = strconv.Itoa(insight.RecommendedMemLimit) + "Mi"
-				insightObj["requests"]["cpu"] = strconv.Itoa(insight.RecommendedCPURequest) + "m"
-				insightObj["requests"]["memory"] = strconv.Itoa(insight.RecommendedMemRequest) + "Mi"
+	} else if approvalSetting == "Not Approved" && insight.CurrentCPULimit > 0 && insight.CurrentMemLimit > 0 && insight.CurrentCPURequest > 0 && insight.CurrentMemRequest > 0 {
 
-			} else if insight.CurrentCPULimit > 0 && insight.CurrentMemLimit > 0 && insight.CurrentCPURequest > 0 && insight.CurrentMemRequest > 0 {
+		insightObj["limits"]["cpu"] = strconv.Itoa(insight.CurrentCPULimit) + "m"
+		insightObj["limits"]["memory"] = strconv.Itoa(insight.CurrentMemLimit) + "Mi"
+		insightObj["requests"]["cpu"] = strconv.Itoa(insight.CurrentCPURequest) + "m"
+		insightObj["requests"]["memory"] = strconv.Itoa(insight.CurrentMemRequest) + "Mi"
 
-				insightObj["limits"]["cpu"] = strconv.Itoa(insight.CurrentCPULimit) + "m"
-				insightObj["limits"]["memory"] = strconv.Itoa(insight.CurrentMemLimit) + "Mi"
-				insightObj["requests"]["cpu"] = strconv.Itoa(insight.CurrentCPURequest) + "m"
-				insightObj["requests"]["memory"] = strconv.Itoa(insight.CurrentMemRequest) + "Mi"
+	} else {
 
-			} else {
-
-				return nil, "", errors.New("invalid resource specs received from repository")
-
-			}
-
-			return insightObj, approvalSetting, nil
-
-		}
+		return nil, "", errors.New("invalid resource specs received from repository")
 
 	}
 
-	return nil, "", errors.New("unable to locate resource spec")
+	return insightObj, approvalSetting, nil
 
 }
 
 //UpdateApprovalSetting this will update the approval status for a specific recommendation
 func UpdateApprovalSetting(approved bool, cluster string, namespace string, objType string, objName string, containerName string) error {
 
-	err := loadInsightCache(cluster)
-	if err != nil {
+	insight, err := lookupInsight(cluster, namespace, objType, objName, containerName)
+	if insight.Container == "" || err != nil {
 		return errors.New("unable to update approval setting")
 	}
 
-	var entityID string
-	for _, insight := range insightCache[cluster] {
-
-		if insight.Cluster == cluster && insight.Namespace == namespace && insight.ControllerType == objType && insight.PodService == objName && insight.Container == containerName {
-
-			entityID = insight.EntityID
-
-		}
-
-	}
-
 	if approved == true {
-		_, err = support.HTTPRequest("PUT", densifyURL+systemsEP+"/"+entityID+"/attributes", densifyUser+":"+densifyPass, []byte("[{\"name\": \"Approval Setting\", \"value\": \"Approve Specific Change\"}]"))
+		_, err = support.HTTPRequest("PUT", densifyURL+systemsEP+"/"+insight.EntityID+"/attributes", densifyUser+":"+densifyPass, []byte("[{\"name\": \"Approval Setting\", \"value\": \"Approve Specific Change\"}]"))
 	} else {
-		_, err = support.HTTPRequest("PUT", densifyURL+systemsEP+"/"+entityID+"/attributes", densifyUser+":"+densifyPass, []byte("[{\"name\": \"Approval Setting\", \"value\": \"Not Approved\"}]"))
+		_, err = support.HTTPRequest("PUT", densifyURL+systemsEP+"/"+insight.EntityID+"/attributes", densifyUser+":"+densifyPass, []byte("[{\"name\": \"Approval Setting\", \"value\": \"Not Approved\"}]"))
 	}
 
 	return err
@@ -201,59 +195,62 @@ func UpdateApprovalSetting(approved bool, cluster string, namespace string, objT
 //GetApprovalSetting this will update the approval status for a specific recommendation
 func GetApprovalSetting(cluster string, namespace string, objType string, objName string, containerName string) (string, error) {
 
-	err := loadInsightCache(cluster)
+	insight, err := lookupInsight(cluster, namespace, objType, objName, containerName)
+	if insight.Container == "" || err != nil {
+		return "", errors.New("unable to get approval setting")
+	}
+
+	approvalSetting, err := getAttribute(insight.EntityID, "attr_ApprovalSetting")
 	if err != nil {
-		return "", errors.New("unable to read approval setting")
+		approvalSetting = "Not Approved"
 	}
 
-	for _, insight := range insightCache[cluster] {
-
-		if insight.Cluster == cluster && insight.Namespace == namespace && insight.ControllerType == objType && insight.PodService == objName && insight.Container == containerName {
-
-			approvalSetting, err := getAttribute(insight.EntityID, "attr_ApprovalSetting")
-			if err != nil {
-				return "", err
-			}
-			return approvalSetting, nil
-
-		}
-
+	if approvalSetting != "Not Approved" {
+		approvalSetting = "Approved"
 	}
 
-	return "", errors.New("unable to read approval setting")
+	return approvalSetting, nil
 
 }
 
-func loadInsightCache(cluster string) error {
+////////////////////////////////////////////////////////
+///////////////////LOCAL FUNCTIONS//////////////////////
+////////////////////////////////////////////////////////
+
+func lookupInsight(cluster string, namespace string, objType string, objName string, containerName string) (Insight, error) {
 
 	if _, ok := insightCache[cluster]; !ok {
+
 		resp, err := support.HTTPRequest("GET", densifyURL+analysisEP, densifyUser+":"+densifyPass, nil)
 		if err != nil {
-			return err
+			return Insight{}, err
 		}
 		var analyses []interface{}
-		found := false
 		json.Unmarshal([]byte(resp), &analyses)
+
 		for _, analysis := range analyses {
 			if analysis.(map[string]interface{})["analysisName"].(string) == cluster {
+
 				resp, err = support.HTTPRequest("GET", densifyURL+analysisEP+"/"+analysis.(map[string]interface{})["analysisId"].(string)+"/results", densifyUser+":"+densifyPass, nil)
 				if err != nil {
-					return err
+					return Insight{}, err
 				}
 
 				var insights []Insight
 				json.Unmarshal([]byte(resp), &insights)
-				insightCache[cluster] = insights
-				found = true
+				for _, insight := range insights {
+					key := insight.Cluster + "/" + insight.Namespace + "/" + insight.ControllerType + "/" + insight.PodService + "/" + insight.Container
+					insightCache[key] = insight
+				}
+
 				break
+
 			}
-		}
-		if found == false {
-			return errors.New("unable to locate resource spec")
 		}
 	}
 
-	return nil
+	key := cluster + "/" + namespace + "/" + objType + "/" + objName + "/" + containerName
+	return insightCache[key], nil
 
 }
 
@@ -272,7 +269,8 @@ func getAttribute(entityID string, attrID string) (string, error) {
 			return val.(map[string]interface{})["value"].(string), nil
 		}
 	}
-	return "Not Approved", nil
+
+	return "", errors.New("error locating attribute[" + attrID + "]")
 
 }
 
@@ -298,10 +296,10 @@ func validateSecrets() error {
 func storeSecrets() {
 
 	storeSecrets := make(map[string]string)
-	storeSecrets["adapter"] = "densify"
+	storeSecrets["adapter"] = "Densify"
 	storeSecrets["densifyURL"] = densifyURL
 	storeSecrets["densifyUser"] = densifyUser
 	storeSecrets["densifyPass"] = densifyPass
-	support.StoreSecrets("optimize-adapter-config", storeSecrets)
+	support.StoreSecrets("helm-optimize-plugin", storeSecrets)
 
 }
