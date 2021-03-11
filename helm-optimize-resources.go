@@ -352,9 +352,6 @@ func scanFlagsForChartDetails(args []string) (string, int, error) {
 	}
 
 	argstemp := args[1:]
-
-	chart := ""
-	chartPos := 1
 	relFound := false
 
 	for i, arg := range argstemp {
@@ -366,9 +363,7 @@ func scanFlagsForChartDetails(args []string) (string, int, error) {
 					relFound = true
 					continue
 				} else {
-					chart = arg
-					chartPos += i
-					break
+					return arg, i + 1, nil
 				}
 			} else if i == 1 {
 				if _, ok := support.InSlice(flags, argstemp[i-1]); ok || !strings.HasPrefix(argstemp[i-1], "-") {
@@ -376,9 +371,7 @@ func scanFlagsForChartDetails(args []string) (string, int, error) {
 						relFound = true
 						continue
 					} else {
-						chart = arg
-						chartPos += i
-						break
+						return arg, i + 1, nil
 					}
 				}
 			} else {
@@ -388,9 +381,7 @@ func scanFlagsForChartDetails(args []string) (string, int, error) {
 							relFound = true
 							continue
 						} else {
-							chart = arg
-							chartPos += i
-							break
+							return arg, i + 1, nil
 						}
 					}
 				} else {
@@ -398,16 +389,14 @@ func scanFlagsForChartDetails(args []string) (string, int, error) {
 						relFound = true
 						continue
 					} else {
-						chart = arg
-						chartPos += i
-						break
+						return arg, i + 1, nil
 					}
 				}
 			}
 		}
 	}
 
-	return chart, chartPos, nil
+	return "", 0, errors.New("could not locate chart path -- try helm optimize (install/upgrade) [NAME] [CHART] [flags]")
 
 }
 

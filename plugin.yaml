@@ -1,5 +1,5 @@
 name: "optimize"
-version: "2.3.1"
+version: "2.3.2"
 usage: "optimize resource spec of running containers during an install or upgrade"
 description: |-
   Inject Densify insights (if available) into the resource specificiations of your running containers 
