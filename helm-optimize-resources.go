@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -319,6 +320,97 @@ func checkGeneralDependancies() {
 
 }
 
+func scanFlagsForChartDetails(args []string) (string, int, error) {
+
+	if !strings.HasPrefix(args[1], "-") && !strings.HasPrefix(args[2], "-") {
+		return args[2], 2, nil
+	}
+
+	stdOut, stdErr, err := support.ExecuteSingleCommand([]string{HelmBin, args[0], "-h"})
+	if err != nil {
+		return "", 0, errors.New(stdErr)
+	}
+
+	re := regexp.MustCompile("Flags:(.*\n)+")
+	match := re.FindStringSubmatch(stdOut)
+
+	re2 := regexp.MustCompile(`\r?\n`)
+	match2 := re2.ReplaceAllString(match[0], " ")
+
+	re3 := regexp.MustCompile("(--[a-zA-Z]*([-]{0,1}[a-zA-Z]*)*   )+")
+	match3 := re3.FindAllString(match2, -1)
+
+	var flags []string
+	for _, val := range match3 {
+		flag := strings.Trim(val, " ")
+		flags = append(flags, flag)
+		re4 := regexp.MustCompile("-[a-z], " + flag)
+		match4 := re4.FindAllString(match2, -1)
+		if len(match4) > 0 {
+			flags = append(flags, strings.Split(match4[0], ",")[0])
+		}
+	}
+
+	argstemp := args[1:]
+
+	chart := ""
+	chartPos := 1
+	relFound := false
+
+	for i, arg := range argstemp {
+
+		if !strings.HasPrefix(arg, "-") {
+
+			if i == 0 {
+				if !relFound {
+					relFound = true
+					continue
+				} else {
+					chart = arg
+					chartPos += i
+					break
+				}
+			} else if i == 1 {
+				if _, ok := support.InSlice(flags, argstemp[i-1]); ok || !strings.HasPrefix(argstemp[i-1], "-") {
+					if !relFound {
+						relFound = true
+						continue
+					} else {
+						chart = arg
+						chartPos += i
+						break
+					}
+				}
+			} else {
+				if strings.HasPrefix(argstemp[i-1], "-") {
+					if _, ok := support.InSlice(flags, argstemp[i-1]); ok {
+						if !relFound {
+							relFound = true
+							continue
+						} else {
+							chart = arg
+							chartPos += i
+							break
+						}
+					}
+				} else {
+					if !relFound {
+						relFound = true
+						continue
+					} else {
+						chart = arg
+						chartPos += i
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return chart, chartPos, nil
+
+}
+
 func main() {
 
 	//set environment variables
@@ -349,18 +441,15 @@ func main() {
 		_, stdErr, err := support.ExecuteSingleCommand(append(append([]string{HelmBin}, args...), "--dry-run"))
 		support.CheckError(stdErr, err, true)
 
-		if strings.HasPrefix(args[1], "-") || strings.HasPrefix(args[2], "-") {
-			fmt.Println("please ensure the helm release name and chart are specified before any flags")
-			fmt.Println("eg. helm optimize " + args[0] + " [NAME] [CHART] [flags]")
-			os.Exit(0)
-		}
+		chart, argPos, err := scanFlagsForChartDetails(os.Args[1:])
+		support.CheckError("", err, true)
 
 		fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
 		fmt.Println("LOCAL CLUSTER: " + localCluster)
 		fmt.Println("REMOTE CLUSTER: " + remoteCluster)
 		fmt.Println("ADAPTER: " + adapter)
 
-		absChartPath, _ := filepath.Abs(args[2])
+		absChartPath, _ := filepath.Abs(chart)
 		chartDirName := filepath.Base(absChartPath)
 
 		//create temporary chart directory
@@ -369,11 +458,11 @@ func main() {
 
 		//check to see if valid chart directory passed in.
 		//if not pull from repo
-		if support.FileExists(args[2] + "/Chart.yaml") {
+		if support.FileExists(chart + "/Chart.yaml") {
 			_, stdErr, err := support.ExecuteSingleCommand([]string{"cp", "-a", absChartPath, tempChartDir})
 			support.CheckError(stdErr, err, true)
 		} else {
-			_, stdErr, err := support.ExecuteSingleCommand([]string{HelmBin, "pull", args[2], "--untar", "--untardir", tempChartDir})
+			_, stdErr, err := support.ExecuteSingleCommand([]string{HelmBin, "pull", chart, "--untar", "--untardir", tempChartDir})
 			support.CheckError(stdErr, err, true)
 		}
 
@@ -385,7 +474,7 @@ func main() {
 
 		fmt.Println("\n--------------------------------------------------------------------------------------------------------------------------------")
 
-		args[2] = tempChartDir + "/" + chartDirName
+		args[argPos] = tempChartDir + "/" + chartDirName
 		stdOut, stdErr, err := support.ExecuteSingleCommand(append([]string{HelmBin}, args...))
 		support.CheckError(stdErr, err, false)
 
