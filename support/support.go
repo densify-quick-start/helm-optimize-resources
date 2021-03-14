@@ -22,6 +22,8 @@ var Config *properties.Properties = nil
 //KubectlBin holds location of kubectl
 var KubectlBin = "kubectl"
 
+var secretNamespace string
+
 //LoadConfigMap loads the config map from the densify forwarder
 func LoadConfigMap() {
 
@@ -63,9 +65,34 @@ func CheckError(message string, err error, exit bool) bool {
 	return false
 }
 
-//RemoveSecret deletes the specified k8s secret
+//LocateConfigNamespace will identify which namespace the configuration secret is stored.
+func LocateConfigNamespace(secretName string) {
+
+	cmd := exec.Command(KubectlBin, "get", "secrets", "-o", "json", "--all-namespaces")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		secretNamespace = ""
+	}
+
+	var secretsMapEncoded map[string]interface{}
+	json.Unmarshal(out, &secretsMapEncoded)
+
+	for _, val := range secretsMapEncoded["items"].([]interface{}) {
+		name := val.(map[string]interface{})["metadata"].(map[string]interface{})["name"]
+		if name == secretName {
+			secretNamespace = val.(map[string]interface{})["metadata"].(map[string]interface{})["namespace"].(string)
+			return
+		}
+
+	}
+
+	secretNamespace = os.Getenv("HELM_NAMESPACE")
+
+}
+
+//DeleteSecret deletes the specified k8s secret
 func DeleteSecret(secretName string) {
-	_, _, _ = ExecuteSingleCommand([]string{KubectlBin, "delete", "secret", secretName, "--ignore-not-found"})
+	_, _, _ = ExecuteSingleCommand([]string{KubectlBin, "delete", "secret", secretName, "--namespace", secretNamespace, "--ignore-not-found"})
 }
 
 //RemoveSecretData deletes the specified k8s secret
@@ -97,7 +124,7 @@ func StoreSecrets(secretName string, secrets map[string]string) bool {
 		existingSecrets[key] = val
 	}
 
-	createCmd := []string{KubectlBin, "create", "secret", "generic", secretName}
+	createCmd := []string{KubectlBin, "create", "secret", "generic", secretName, "--namespace", secretNamespace}
 	for key, val := range existingSecrets {
 		createCmd = append(createCmd, "--from-literal="+key+"="+val)
 	}
@@ -115,7 +142,7 @@ func StoreSecrets(secretName string, secrets map[string]string) bool {
 //RetrieveSecrets will retreive the specified secret
 func RetrieveSecrets(secretName string) map[string]string {
 
-	stdOut, _, err := ExecuteSingleCommand([]string{KubectlBin, "get", "secret", secretName, "-o", "jsonpath={.data}"})
+	stdOut, _, err := ExecuteSingleCommand([]string{KubectlBin, "get", "secret", secretName, "--namespace", secretNamespace, "-o", "jsonpath={.data}"})
 	if err != nil {
 		return nil
 	}

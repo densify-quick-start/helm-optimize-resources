@@ -416,7 +416,7 @@ func main() {
 		}
 	}
 
-	//if helm command is not install, upgrade or template, then just pass along to helm.
+	//if helm command is not install, upgrade, then just pass along to helm.
 	if args[0] != "install" && args[0] != "upgrade" {
 
 		stdOut, stdErr, err := support.ExecuteSingleCommand(append([]string{HelmBin}, args...))
@@ -455,9 +455,22 @@ func main() {
 			support.CheckError(stdErr, err, true)
 		}
 
+		chartYaml, err := ioutil.ReadFile(tempChartDir + "/" + chartDirName + "/Chart.yaml")
+		support.CheckError("", err, true)
+
+		var chartMap map[string]interface{}
+		err = yaml.Unmarshal([]byte(chartYaml), &chartMap)
+		support.CheckError("", err, true)
+
 		//render chart and output to temporary directory
 		_, stdErr, err = support.ExecuteSingleCommand(append(append([]string{HelmBin, "template"}, args[1:]...), "--output-dir", tempChartDir))
 		support.CheckError(stdErr, err, true)
+
+		//check if rendered charts are in diff directory.  if they are copy them to temp directory.
+		if chartDirName != chartMap["name"].(string) {
+			_, stdErr, err := support.ExecuteSingleCommand([]string{"cp", "-a", tempChartDir + "/" + chartMap["name"].(string) + "/.", tempChartDir + "/" + chartDirName})
+			support.CheckError(stdErr, err, true)
+		}
 
 		processChart(tempChartDir+"/"+chartDirName, args)
 
@@ -637,6 +650,8 @@ func interpolateContext() {
 		}
 	}
 
+	support.LocateConfigNamespace("helm-optimize-plugin")
+
 	if val, ok := support.RetrieveSecrets("helm-optimize-plugin")["remoteCluster"]; ok {
 		remoteCluster = val
 	} else {
@@ -647,6 +662,9 @@ func interpolateContext() {
 				remoteCluster = clusterName
 			} else if clusterName, ok := support.Config.Get("prometheus_address"); ok {
 				remoteCluster = clusterName
+			} else {
+				fmt.Println("could not resolve remote cluster -- please configure manually using 'helm optimize -c --cluster-mapping'")
+				os.Exit(0)
 			}
 		} else {
 			fmt.Println("could not resolve remote cluster -- please configure manually using 'helm optimize -c --cluster-mapping'")
