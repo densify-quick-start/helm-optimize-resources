@@ -8,7 +8,7 @@ When the plugin is utilized, the following operations are completed **in the spe
 2) If the parameter repo is down or there is no optimal spec at the time of execution, then maintain the current configuration of container.  (i.e no changes)
 3) If the container is not currently running (case INSTALL) or the container is currently running with no resource specification, then implement the default configuration found in the VALUES.yaml file(s)
 
-![Test Image 6](images/HL-helm-architecture.JPG)
+![Test Image 6](images/HL-helm-architecture2.JPG)
 
 ### Prerequisites
 - Densify account, which is provided with a Densify subscription or through a free trial (https://www.densify.com/service/signup)
