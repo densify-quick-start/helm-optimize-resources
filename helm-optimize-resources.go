@@ -189,6 +189,14 @@ func processPluginSwitches(args []string) {
 			support.StoreSecrets("helm-optimize-plugin", map[string]string{"remoteCluster": remoteCluster})
 			os.Exit(0)
 		}
+
+		//check if user is clearing config
+		if args[1] == "--clear-config" {
+			support.LocateConfigNamespace("helm-optimize-plugin")
+			support.DeleteSecret("helm-optimize-plugin")
+			os.Exit(0)
+		}
+
 	}
 
 	if args[0] == "-a" && len(args) > 2 {

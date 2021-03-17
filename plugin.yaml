@@ -38,3 +38,4 @@ command: "$HELM_PLUGIN_DIR/helm-optimize-resources"
 hooks:
   install: "$HELM_PLUGIN_DIR/install-binary.sh"
   update: "$HELM_PLUGIN_DIR/install-binary.sh"
+  delete: "for namespace in `kubectl get namespaces -o jsonpath={.items[*].metadata.name}`; do kubectl delete secret helm-optimize-plugin --namespace $namespace --ignore-not-found; done"
