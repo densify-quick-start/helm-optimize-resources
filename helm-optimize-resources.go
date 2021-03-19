@@ -413,10 +413,10 @@ func main() {
 	//set environment variables
 	args := os.Args[1:]
 
-	fmt.Println(args)
-
-	checkGeneralDependancies()
-	interpolateContext()
+	if !(len(args) == 1 && args[0] == "-h") {
+		checkGeneralDependancies()
+		interpolateContext()
+	}
 	processPluginSwitches(args)
 
 	//initialize the adapter

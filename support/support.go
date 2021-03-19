@@ -30,13 +30,14 @@ func LoadConfigMap() {
 	var stdOut, stdErr string
 	var err error
 	if stdOut, stdErr, err = ExecuteSingleCommand([]string{KubectlBin, "get", "configmaps", "-A", "-o", "json"}); err != nil {
-		fmt.Println("unable to acquire densify config map: " + stdErr)
+		fmt.Println(stdErr)
+		return
 	}
 
 	var configMaps map[string]interface{}
 	if err := json.Unmarshal([]byte(stdOut), &configMaps); err != nil {
-		fmt.Print("unable to acquire densify config map: ")
 		fmt.Println(err)
+		return
 	}
 
 	for _, configMap := range configMaps["items"].([]interface{}) {
@@ -45,8 +46,6 @@ func LoadConfigMap() {
 			return
 		}
 	}
-
-	fmt.Println("unable to acquire densify config map")
 
 }
 
