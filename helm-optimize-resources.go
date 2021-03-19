@@ -413,6 +413,8 @@ func main() {
 	//set environment variables
 	args := os.Args[1:]
 
+	fmt.Println(args)
+
 	checkGeneralDependancies()
 	interpolateContext()
 	processPluginSwitches(args)

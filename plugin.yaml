@@ -1,6 +1,6 @@
 name: "optimize"
 version: "2.3.2"
-usage: "optimize resource spec of running containers during an install or upgrade"
+usage: "optimize performance of a release"
 description: |-
   Inject Densify insights (if available) into the resource specificiations of your running containers 
   whenever install or upgrade is called.  Insights are extracted from your preferred parameter repository 
@@ -38,4 +38,15 @@ command: "$HELM_PLUGIN_DIR/helm-optimize-resources"
 hooks:
   install: "$HELM_PLUGIN_DIR/install-binary.sh"
   update: "$HELM_PLUGIN_DIR/install-binary.sh"
-  delete: "for namespace in `kubectl get namespaces -o jsonpath={.items[*].metadata.name}`; do kubectl delete secret helm-optimize-plugin --namespace $namespace --ignore-not-found > null; done"
+  delete: |
+    for cluster in `kubectl config view -o jsonpath={.clusters[*].name}`
+        do
+            read -p "Delete helm-optimize-plugin configuration from $cluster [y/n]? " answer
+            if [ "$answer" = "y" ]
+            then
+                for namespace in `kubectl get namespaces --cluster $cluster -o jsonpath={.items[*].metadata.name}`
+                    do
+                        kubectl delete secret helm-optimize-plugin --cluster $cluster --namespace $namespace --ignore-not-found > null
+                    done
+            fi
+        done
