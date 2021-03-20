@@ -427,7 +427,7 @@ func main() {
 	}
 
 	//if helm command is not install, upgrade, then just pass along to helm.
-	if args[0] != "install" && args[0] != "upgrade" {
+	if args[0] != "install" && args[0] != "upgrade" && args[0] != "template" {
 
 		stdOut, stdErr, err := support.ExecuteSingleCommand(append([]string{HelmBin}, args...))
 		support.CheckError(stdErr, err, true)
@@ -446,7 +446,7 @@ func main() {
 		fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
 		fmt.Println("LOCAL CLUSTER: " + localCluster)
 		fmt.Println("REMOTE CLUSTER: " + remoteCluster)
-		fmt.Println("ADAPTER: " + adapter)
+		fmt.Println("ADAPTER: " + adapter + "\n")
 
 		absChartPath, _ := filepath.Abs(chart)
 		chartDirName := filepath.Base(absChartPath)
@@ -484,17 +484,18 @@ func main() {
 
 		processChart(tempChartDir+"/"+chartDirName, args)
 
-		fmt.Println("\n--------------------------------------------------------------------------------------------------------------------------------")
+		fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
 
 		args[argPos] = tempChartDir + "/" + chartDirName
 		stdOut, stdErr, err := support.ExecuteSingleCommand(append([]string{HelmBin}, args...))
 		support.CheckError(stdErr, err, false)
+		if err == nil {
+			fmt.Println(stdOut)
+		}
 
 		//delete temporary chart directory
 		_, stdErr, err = support.ExecuteSingleCommand([]string{"rm", "-rf", tempChartDir})
 		support.CheckError(stdErr, err, true)
-
-		fmt.Println(stdOut)
 
 	}
 }
@@ -510,15 +511,30 @@ func processChart(chartPath string, args []string) error {
 		}
 	}
 
-	templates, err := ioutil.ReadDir(chartPath + "/templates")
+	fmt.Println("CHART: " + strings.Split(chartPath, "/")[len(strings.Split(chartPath, "/"))-1])
+	fmt.Println(strings.Repeat("=", 7+len(strings.Split(chartPath, "/")[len(strings.Split(chartPath, "/"))-1])))
+	processTemplates(chartPath+"/templates", args)
+
+	return nil
+
+}
+
+func processTemplates(templatePath string, args []string) error {
+
+	templates, err := ioutil.ReadDir(templatePath)
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	for _, template := range templates {
-		if !template.IsDir() && strings.HasSuffix(template.Name(), ".yaml") {
 
-			manifest, err := ioutil.ReadFile(chartPath + "/templates/" + template.Name())
+		if template.IsDir() {
+
+			processTemplates(templatePath+"/"+template.Name(), args)
+
+		} else if !template.IsDir() && strings.HasSuffix(template.Name(), ".yaml") {
+
+			manifest, err := ioutil.ReadFile(templatePath + "/" + template.Name())
 			support.CheckError("", err, true)
 
 			var manifestYAML map[string]interface{}
@@ -531,6 +547,14 @@ func processChart(chartPath string, args []string) error {
 
 			if _, ok := objTypeContainerPath[objType]; !ok {
 				continue
+			}
+
+			if _, ok := manifestYAML["metadata"]; ok {
+				if _, ok := manifestYAML["metadata"].(map[string]interface{})["annotations"]; ok {
+					if helmTest, ok := manifestYAML["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})["helm.sh/hook"]; ok && strings.HasPrefix(helmTest.(string), "test") {
+						continue
+					}
+				}
 			}
 
 			objNamespace := namespace
@@ -548,15 +572,15 @@ func processChart(chartPath string, args []string) error {
 				containers = manifestYAML["spec"].(map[string]interface{})["template"].(map[string]interface{})["spec"].(map[string]interface{})["containers"].([]interface{})
 			}
 
-			fmt.Println("\nnamespace[" + objNamespace + "] objType[" + objType + "] objName[" + objName + "]")
+			fmt.Println("namespace[" + objNamespace + "] objType[" + objType + "] objName[" + objName + "]")
 			var i int = 1
 			for _, container := range containers {
 				var containerName string
 				var defaultConfig map[string]interface{} = nil
-				if val, ok := container.(map[string]interface{})["name"]; ok && val != nil {
-					containerName = container.(map[string]interface{})["name"].(string)
+				if val, ok := container.(map[string]interface{})["name"].(string); ok {
+					containerName = val
 				}
-				if val, ok := container.(map[string]interface{})["resources"]; ok && val != nil {
+				if val, ok := container.(map[string]interface{})["resources"].(map[string]interface{}); ok && len(val) > 0 {
 					defaultConfig = container.(map[string]interface{})["resources"].(map[string]interface{})
 				}
 				insight, approvalSetting, err := getInsight(remoteCluster, objNamespace, objType, objName, containerName)
@@ -584,9 +608,11 @@ func processChart(chartPath string, args []string) error {
 
 			manifestYAMLStr, err := yaml.Marshal(manifestYAML)
 			support.CheckError("", err, true)
-			err = ioutil.WriteFile(chartPath+"/templates/"+template.Name(), manifestYAMLStr, 0644)
+			err = ioutil.WriteFile(templatePath+"/"+template.Name(), manifestYAMLStr, 0644)
+			fmt.Println("")
 
 		}
+
 	}
 
 	return nil

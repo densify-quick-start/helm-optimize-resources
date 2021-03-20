@@ -16,6 +16,7 @@ description: |-
       SUB-OPTIONS:
         --adapter [use this to configure the repo adapter]
         --cluster-mapping [use this to configure the cluster map]
+        --clear-config [use this to erase the existing config]
       Eg. helm optimize -c --adapter
       Eg. helm optimize -c --cluster-mapping
 
