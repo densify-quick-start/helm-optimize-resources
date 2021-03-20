@@ -42,7 +42,7 @@ hooks:
   delete: |
     for cluster in `kubectl config view -o jsonpath={.clusters[*].name}`
       do
-        echo "deleting helm-optimize-plugin configuration from $cluster."
+        echo "deleting helm-optimize-plugin configuration from $cluster"
         for namespace in `kubectl get namespaces --cluster $cluster -o jsonpath={.items[*].metadata.name}`
           do
               kubectl delete secret helm-optimize-plugin --cluster $cluster --namespace $namespace --ignore-not-found > null
