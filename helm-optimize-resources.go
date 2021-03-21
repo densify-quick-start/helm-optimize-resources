@@ -330,10 +330,6 @@ func checkGeneralDependancies() {
 
 func scanFlagsForChartDetails(args []string) (string, int, error) {
 
-	if !strings.HasPrefix(args[1], "-") && !strings.HasPrefix(args[2], "-") {
-		return args[2], 2, nil
-	}
-
 	stdOut, stdErr, err := support.ExecuteSingleCommand([]string{HelmBin, args[0], "-h"})
 	if err != nil {
 		return "", 0, errors.New(stdErr)
@@ -360,48 +356,41 @@ func scanFlagsForChartDetails(args []string) (string, int, error) {
 	}
 
 	argstemp := args[1:]
-	relFound := false
+
+	type input struct {
+		value    string
+		position int
+	}
+	var results []input = nil
 
 	for i, arg := range argstemp {
 
 		if !strings.HasPrefix(arg, "-") {
 
 			if i == 0 {
-				if !relFound {
-					relFound = true
-					continue
-				} else {
-					return arg, i + 1, nil
-				}
+				results = append(results, input{arg, i + 1})
+				continue
 			} else if i == 1 {
 				if _, ok := support.InSlice(flags, argstemp[i-1]); ok || !strings.HasPrefix(argstemp[i-1], "-") {
-					if !relFound {
-						relFound = true
-						continue
-					} else {
-						return arg, i + 1, nil
-					}
+					results = append(results, input{arg, i + 1})
+					continue
 				}
 			} else {
 				if strings.HasPrefix(argstemp[i-1], "-") {
 					if _, ok := support.InSlice(flags, argstemp[i-1]); ok {
-						if !relFound {
-							relFound = true
-							continue
-						} else {
-							return arg, i + 1, nil
-						}
+						results = append(results, input{arg, i + 1})
+						continue
 					}
 				} else {
-					if !relFound {
-						relFound = true
-						continue
-					} else {
-						return arg, i + 1, nil
-					}
+					results = append(results, input{arg, i + 1})
+					continue
 				}
 			}
 		}
+	}
+
+	if results != nil {
+		return results[len(results)-1].value, results[len(results)-1].position, nil
 	}
 
 	return "", 0, errors.New("could not locate chart path -- try helm optimize (install/upgrade) [NAME] [CHART] [flags]")
