@@ -491,20 +491,44 @@ func main() {
 
 func processChart(chartPath string, args []string) error {
 
-	charts, err := ioutil.ReadDir(chartPath + "/charts")
+	objs, err := ioutil.ReadDir(chartPath)
 	if err == nil {
-		for _, chart := range charts {
-			if chart.IsDir() {
-				processChart(chartPath+"/charts/"+chart.Name(), args)
+		for _, obj := range objs {
+			if obj.IsDir() {
+				err := processChart(chartPath+"/"+obj.Name(), args)
+				if err != nil {
+					fmt.Println(err)
+				}
 			}
 		}
 	}
 
-	fmt.Println("CHART: " + strings.Split(chartPath, "/")[len(strings.Split(chartPath, "/"))-1])
-	fmt.Println(strings.Repeat("=", 7+len(strings.Split(chartPath, "/")[len(strings.Split(chartPath, "/"))-1])))
-	processTemplates(chartPath+"/templates", args)
+	//check if path provided contains valid structure to analyze templates
+	chartFileContents, err := ioutil.ReadFile(chartPath + "/Chart.yaml")
+	if err != nil {
+		return nil
+	}
 
-	return nil
+	//unmarshal Chart.yaml to check whether it's a valid yaml file
+	var chartStruct map[string]interface{}
+	if err := yaml.Unmarshal(chartFileContents, &chartStruct); err != nil {
+		return errors.New("'Chart.yaml' not a valid yaml file")
+	}
+
+	//if Chart.yaml has a name field, then print chart name
+	if _, ok := chartStruct["name"]; ok {
+		printData := "CHART: " + chartStruct["name"].(string)
+		fmt.Println(printData + "\n" + strings.Repeat("=", len(printData)))
+	} else {
+		return errors.New("'Chart.yaml' does not contain name field")
+	}
+
+	//if templates directory exists, then process all files in that directory
+	if support.DirExists(chartPath + "/templates") {
+		return processTemplates(chartPath+"/templates", args)
+	}
+
+	return errors.New("templates directory doesn't exist for this chart - skipping\n\n")
 
 }
 
@@ -512,7 +536,7 @@ func processTemplates(templatePath string, args []string) error {
 
 	templates, err := ioutil.ReadDir(templatePath)
 	if err != nil {
-		fmt.Println(err)
+		return nil
 	}
 
 	for _, template := range templates {
@@ -521,18 +545,35 @@ func processTemplates(templatePath string, args []string) error {
 
 			processTemplates(templatePath+"/"+template.Name(), args)
 
-		} else if !template.IsDir() && strings.HasSuffix(template.Name(), ".yaml") {
+		} else {
 
 			manifest, err := ioutil.ReadFile(templatePath + "/" + template.Name())
-			support.CheckError("", err, true)
+			if err != nil {
+				continue
+			}
 
 			var manifestYAML map[string]interface{}
 			if err := yaml.Unmarshal([]byte(manifest), &manifestYAML); err != nil {
 				continue
 			}
 
-			objType := manifestYAML["kind"].(string)
-			objName := manifestYAML["metadata"].(map[string]interface{})["name"].(string)
+			var objType, objName string
+
+			if _, ok := manifestYAML["kind"]; ok {
+				objType = manifestYAML["kind"].(string)
+			} else {
+				continue
+			}
+
+			if _, ok := manifestYAML["metadata"]; ok {
+				if _, ok := manifestYAML["metadata"].(map[string]interface{})["name"]; ok {
+					objName = manifestYAML["metadata"].(map[string]interface{})["name"].(string)
+				} else {
+					continue
+				}
+			} else {
+				continue
+			}
 
 			if _, ok := objTypeContainerPath[objType]; !ok {
 				continue
@@ -548,7 +589,7 @@ func processTemplates(templatePath string, args []string) error {
 
 			objNamespace := namespace
 			if val, ok := manifestYAML["metadata"].(map[string]interface{})["namespace"]; ok && val != nil {
-				objNamespace = manifestYAML["metadata"].(map[string]interface{})["namespace"].(string)
+				objNamespace = val.(string)
 			}
 
 			var containers []interface{}
