@@ -106,7 +106,7 @@ fail_trap() {
 # testVersion tests the installed client to make sure it is working.
 testVersion() {
   set +e
-  echo "$PROJECT_NAME installed into $HELM_PLUGINS/$PROJECT_NAME"
+  #echo "$PROJECT_NAME installed into $HELM_PLUGINS/$PROJECT_NAME"
   # To avoid to keep track of the Windows suffix,
   # call the plugin assuming it is in the PATH
   PATH=$PATH:$HELM_PLUGINS/$PROJECT_NAME
@@ -121,14 +121,8 @@ trap "fail_trap" EXIT
 set -e
 initArch
 initOS
-echo "1"
 verifySupported
-echo "1"
 getDownloadURL
-echo "1"
 downloadFile
-echo "1"
 installFile
-echo "1"
 testVersion
-echo "1"
