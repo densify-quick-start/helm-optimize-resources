@@ -105,13 +105,11 @@ fail_trap() {
 
 # testVersion tests the installed client to make sure it is working.
 testVersion() {
-  set +e
-  #echo "$PROJECT_NAME installed into $HELM_PLUGINS/$PROJECT_NAME"
+  echo "$PROJECT_NAME installed into $HELM_PLUGINS/$PROJECT_NAME"
   # To avoid to keep track of the Windows suffix,
   # call the plugin assuming it is in the PATH
   PATH=$PATH:$HELM_PLUGINS/$PROJECT_NAME
   helm optimize -h
-  set -e
 }
 
 # Execution
