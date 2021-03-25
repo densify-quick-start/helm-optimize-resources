@@ -109,7 +109,8 @@ testVersion() {
   # To avoid to keep track of the Windows suffix,
   # call the plugin assuming it is in the PATH
   PATH=$PATH:$HELM_PLUGINS/$PROJECT_NAME
-  helm optimize -h
+  output=`helm optimize -h`
+  echo $output
 }
 
 # Execution
