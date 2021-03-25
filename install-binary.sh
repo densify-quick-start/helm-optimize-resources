@@ -121,8 +121,14 @@ trap "fail_trap" EXIT
 set -e
 initArch
 initOS
+echo "1"
 verifySupported
+echo "1"
 getDownloadURL
+echo "1"
 downloadFile
+echo "1"
 installFile
+echo "1"
 testVersion
+echo "1"
