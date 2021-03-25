@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/densify-quick-start/helm-optimize-resources/densify"
 	"github.com/densify-quick-start/helm-optimize-resources/ssm"
@@ -52,7 +53,7 @@ func initializeAdapter() error {
 	if adapter == "" {
 		if val, ok := support.RetrieveSecrets("helm-optimize-plugin")["adapter"]; ok {
 			adapter = val
-		} else if adapter == "" {
+		} else {
 			adapter = "Densify"
 		}
 	}
@@ -199,85 +200,60 @@ func processPluginSwitches(args []string) {
 
 	}
 
-	if args[0] == "-a" && len(args) > 2 {
+	if args[0] == "-a" && len(args) > 1 {
 
 		if err := initializeAdapter(); err != nil {
 			os.Exit(0)
 		}
 
-		stdOut, stdErr, err := support.ExecuteSingleCommand(append([]string{HelmBin, "template"}, args...))
+		stdOut, stdErr, err := support.ExecuteSingleCommand(append([]string{HelmBin, "template"}, args[1:]...))
 		support.CheckError(stdErr, err, true)
 
+		support.PrintCharAcrossScreen("-")
 		fmt.Println("LOCAL CLUSTER: " + localCluster)
 		fmt.Println("REMOTE CLUSTER: " + remoteCluster)
 		fmt.Println("ADAPTER: " + adapter)
 
 		for _, manifest := range strings.Split(stdOut, "---") {
 
-			var manifestMap map[string]interface{}
-			yaml.Unmarshal([]byte(manifest), &manifestMap)
-
-			if _, ok := manifestMap["metadata"]; ok {
-				if _, ok := manifestMap["metadata"].(map[string]interface{})["annotations"]; ok {
-					if helmTest, ok := manifestMap["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})["helm.sh/hook"]; ok && strings.HasPrefix(helmTest.(string), "test") {
-						continue
-					}
-				}
+			objType, objName, objNamespace, containers, _, err := validateManifest([]byte(manifest))
+			if err != nil {
+				continue
 			}
 
-			if objType, ok := manifestMap["kind"]; ok {
+			fmt.Println("\nnamespace[" + objNamespace + "] objType[" + objType + "] objName[" + objName + "]")
+			for i, container := range containers {
 
-				if _, ok := objTypeContainerPath[objType.(string)]; ok {
-
-					objName := manifestMap["metadata"].(map[string]interface{})["name"].(string)
-					var objNamespace string
-					if ns, ok := manifestMap["metadata"].(map[string]interface{})["namespace"]; ok {
-						objNamespace = ns.(string)
-					} else {
-						objNamespace = namespace
-					}
-
-					var containers []interface{}
-					if objType == "Pod" {
-						containers = manifestMap["spec"].(map[string]interface{})["containers"].([]interface{})
-					} else if objType == "CronJob" {
-						containers = manifestMap["spec"].(map[string]interface{})["jobTemplate"].(map[string]interface{})["spec"].(map[string]interface{})["template"].(map[string]interface{})["spec"].(map[string]interface{})["containers"].([]interface{})
-					} else {
-						containers = manifestMap["spec"].(map[string]interface{})["template"].(map[string]interface{})["spec"].(map[string]interface{})["containers"].([]interface{})
-					}
-
-					fmt.Println("\nnamespace[" + objNamespace + "] objType[" + objType.(string) + "] objName[" + objName + "]")
-					for i, container := range containers {
-
-						containerName := container.(map[string]interface{})["name"].(string)
-						approvalSetting, err := getApprovalSetting(remoteCluster, objNamespace, objType.(string), objName, containerName)
-						if err != nil {
-							fmt.Println(strconv.Itoa(i+1) + "." + containerName + " not found in repository.")
-							continue
+				containerName := container.(map[string]interface{})["name"].(string)
+				approvalSetting, err := getApprovalSetting(remoteCluster, objNamespace, objType, objName, containerName)
+				if err != nil {
+					fmt.Println(strconv.Itoa(i+1) + "." + containerName + " not found in repository.")
+					continue
+				}
+				fmt.Print(strconv.Itoa(i+1) + "." + containerName + " [" + approvalSetting + "] ")
+				var approval string
+				if approvalSetting == "Not Approved" {
+					fmt.Print("Approve this insight (y/n) [y]: ")
+					fmt.Scanln(&approval)
+					if approval == "y" || approval == "" {
+						if err := updateApprovalSetting(true, remoteCluster, objNamespace, objType, objName, containerName); err != nil {
+							fmt.Print("  " + err.Error())
 						}
-						fmt.Print(strconv.Itoa(i+1) + "." + containerName + " (" + approvalSetting + ") ")
-						var approval string
-						if approvalSetting == "Not Approved" {
-							fmt.Print("Approve this insight (y/n) [y]: ")
-							fmt.Scanln(&approval)
-							if approval == "y" || approval == "" {
-								updateApprovalSetting(true, remoteCluster, namespace, objType.(string), objName, containerName)
-							}
-						} else {
-							fmt.Print("Unapprove this insight (y/n) [y]: ")
-							fmt.Scanln(&approval)
-							if approval == "y" || approval == "" {
-								updateApprovalSetting(false, remoteCluster, namespace, objType.(string), objName, containerName)
-							}
-						}
-
 					}
-
+				} else {
+					fmt.Print("Unapprove this insight (y/n) [y]: ")
+					fmt.Scanln(&approval)
+					if approval == "y" || approval == "" {
+						if err := updateApprovalSetting(false, remoteCluster, objNamespace, objType, objName, containerName); err != nil {
+							fmt.Print("  " + err.Error())
+						}
+					}
 				}
 
 			}
-
 		}
+
+		support.PrintCharAcrossScreen("-")
 		os.Exit(0)
 
 	}
@@ -297,12 +273,12 @@ func printHowToUse() error {
 
 	var pluginYAML map[string]interface{}
 	yaml.Unmarshal(content, &pluginYAML)
-	fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
+	support.PrintCharAcrossScreen("-")
 	fmt.Println("NAME: Optimize Plugin")
 	fmt.Println("VERSION: " + pluginYAML["version"].(string))
-	fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
+	support.PrintCharAcrossScreen("-")
 	fmt.Println(pluginYAML["description"].(string))
-	fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
+	support.PrintCharAcrossScreen("-")
 
 	return nil
 
@@ -399,6 +375,8 @@ func scanFlagsForChartDetails(args []string) (string, int, error) {
 
 func main() {
 
+	startTime := time.Now()
+
 	//set environment variables
 	args := os.Args[1:]
 
@@ -432,7 +410,7 @@ func main() {
 		chart, argPos, err := scanFlagsForChartDetails(os.Args[1:])
 		support.CheckError("", err, true)
 
-		fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
+		support.PrintCharAcrossScreen("-")
 		fmt.Println("LOCAL CLUSTER: " + localCluster)
 		fmt.Println("REMOTE CLUSTER: " + remoteCluster)
 		fmt.Println("ADAPTER: " + adapter + "\n")
@@ -473,7 +451,8 @@ func main() {
 
 		processChart(tempChartDir+"/"+chartDirName, args)
 
-		fmt.Println("--------------------------------------------------------------------------------------------------------------------------------")
+		fmt.Printf("EXECUTION TIME: %.2fs\n", time.Now().Sub(startTime).Seconds())
+		support.PrintCharAcrossScreen("-")
 
 		args[argPos] = tempChartDir + "/" + chartDirName
 		stdOut, stdErr, err := support.ExecuteSingleCommand(append([]string{HelmBin}, args...))
@@ -552,91 +531,61 @@ func processTemplates(templatePath string, args []string) error {
 				continue
 			}
 
-			var manifestYAML map[string]interface{}
-			if err := yaml.Unmarshal([]byte(manifest), &manifestYAML); err != nil {
+			objType, objName, objNamespace, containers, manifestMap, err := validateManifest(manifest)
+			if err != nil {
 				continue
-			}
-
-			var objType, objName string
-
-			if _, ok := manifestYAML["kind"]; ok {
-				objType = manifestYAML["kind"].(string)
-			} else {
-				continue
-			}
-
-			if _, ok := manifestYAML["metadata"]; ok {
-				if _, ok := manifestYAML["metadata"].(map[string]interface{})["name"]; ok {
-					objName = manifestYAML["metadata"].(map[string]interface{})["name"].(string)
-				} else {
-					continue
-				}
-			} else {
-				continue
-			}
-
-			if _, ok := objTypeContainerPath[objType]; !ok {
-				continue
-			}
-
-			if _, ok := manifestYAML["metadata"]; ok {
-				if _, ok := manifestYAML["metadata"].(map[string]interface{})["annotations"]; ok {
-					if helmTest, ok := manifestYAML["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})["helm.sh/hook"]; ok && strings.HasPrefix(helmTest.(string), "test") {
-						continue
-					}
-				}
-			}
-
-			objNamespace := namespace
-			if val, ok := manifestYAML["metadata"].(map[string]interface{})["namespace"]; ok && val != nil {
-				objNamespace = val.(string)
-			}
-
-			var containers []interface{}
-			switch objType {
-			case "Pod":
-				containers = manifestYAML["spec"].(map[string]interface{})["containers"].([]interface{})
-			case "CronJob":
-				containers = manifestYAML["spec"].(map[string]interface{})["jobTemplate"].(map[string]interface{})["spec"].(map[string]interface{})["template"].(map[string]interface{})["spec"].(map[string]interface{})["containers"].([]interface{})
-			default:
-				containers = manifestYAML["spec"].(map[string]interface{})["template"].(map[string]interface{})["spec"].(map[string]interface{})["containers"].([]interface{})
 			}
 
 			fmt.Println("namespace[" + objNamespace + "] objType[" + objType + "] objName[" + objName + "]")
 			var i int = 1
 			for _, container := range containers {
+
 				var containerName string
-				var defaultConfig map[string]interface{} = nil
-				if val, ok := container.(map[string]interface{})["name"].(string); ok {
-					containerName = val
+				if containerName = support.CheckMap(container.(map[string]interface{}), "name"); containerName == "" {
+					continue
 				}
-				if val, ok := container.(map[string]interface{})["resources"].(map[string]interface{}); ok && len(val) > 0 {
-					defaultConfig = container.(map[string]interface{})["resources"].(map[string]interface{})
-				}
+
+				fmt.Print(strconv.Itoa(i) + "." + containerName + ": ")
+
+				//try to get recommendation from repo
 				insight, approvalSetting, err := getInsight(remoteCluster, objNamespace, objType, objName, containerName)
-				fmt.Print(strconv.Itoa(i) + "." + containerName + ": [" + approvalSetting + "] ")
 				if err != nil {
 					fmt.Println(err)
-					fmt.Print("  Checking Cluster: ")
-					insight, err = extractResourceSpecFromK8S(remoteCluster, objNamespace, objType, objName, containerName)
-					if err != nil {
-						fmt.Println(err)
-						fmt.Print("  Checking Defaults: ")
-						if defaultConfig != nil {
-							fmt.Println(defaultConfig)
-						} else {
-							fmt.Println("*WARNING* No default config present!")
-						}
-					}
-				}
-				if insight != nil {
+				} else {
+					fmt.Print("[" + approvalSetting + "] ")
 					fmt.Println(insight)
 					container.(map[string]interface{})["resources"] = insight
+					i++
+					continue
 				}
+
+				//try to get recommendation from k8s
+				fmt.Print("  Checking Cluster: ")
+				insight, err = extractResourceSpecFromK8S(remoteCluster, objNamespace, objType, objName, containerName)
+				if err != nil {
+					fmt.Println(err)
+				} else {
+					fmt.Println(insight)
+					container.(map[string]interface{})["resources"] = insight
+					i++
+					continue
+				}
+
+				//try to get defaults from user
+				fmt.Print("  Checking Defaults: ")
+				var defaultConfig map[string]interface{} = nil
+				if val, ok := container.(map[string]interface{})["resources"].(map[string]interface{}); ok && len(val) > 0 {
+					defaultConfig = container.(map[string]interface{})["resources"].(map[string]interface{})
+					fmt.Println(defaultConfig)
+				} else {
+					fmt.Println("*WARNING* No default config present!")
+				}
+
 				i++
+
 			}
 
-			manifestYAMLStr, err := yaml.Marshal(manifestYAML)
+			manifestYAMLStr, err := yaml.Marshal(manifestMap)
 			support.CheckError("", err, true)
 			err = ioutil.WriteFile(templatePath+"/"+template.Name(), manifestYAMLStr, 0644)
 			fmt.Println("")
@@ -646,6 +595,49 @@ func processTemplates(templatePath string, args []string) error {
 	}
 
 	return nil
+
+}
+
+func validateManifest(manifest []byte) (string, string, string, []interface{}, map[string]interface{}, error) {
+
+	var manifestMap map[string]interface{}
+	if err := yaml.Unmarshal(manifest, &manifestMap); err != nil {
+		return "", "", "", nil, nil, errors.New("unable to unmarshal manifest")
+	}
+
+	var objType, objName, objNamespace string
+
+	if objType = support.CheckMap(manifestMap, "kind"); objType == "" {
+		return "", "", "", nil, nil, errors.New("manifest does not contain valid k8s objType")
+	}
+
+	if objName = support.CheckMap(manifestMap, "metadata", "name"); objName == "" {
+		return "", "", "", nil, nil, errors.New("manifest does not contain valid k8s objName")
+	}
+
+	if objNamespace = support.CheckMap(manifestMap, "metadata", "namespace"); objNamespace == "" {
+		objNamespace = namespace
+	}
+
+	if _, ok := objTypeContainerPath[objType]; !ok {
+		return "", "", "", nil, nil, errors.New("manifest contains objType that's not supported")
+	}
+
+	if val := support.CheckMap(manifestMap, "metadata", "annotations", "helm.sh/hook"); strings.HasPrefix(val, "test") {
+		return "", "", "", nil, nil, errors.New("manifest is for helm test pod")
+	}
+
+	var containers []interface{}
+	switch objType {
+	case "Pod":
+		containers = manifestMap["spec"].(map[string]interface{})["containers"].([]interface{})
+	case "CronJob":
+		containers = manifestMap["spec"].(map[string]interface{})["jobTemplate"].(map[string]interface{})["spec"].(map[string]interface{})["template"].(map[string]interface{})["spec"].(map[string]interface{})["containers"].([]interface{})
+	default:
+		containers = manifestMap["spec"].(map[string]interface{})["template"].(map[string]interface{})["spec"].(map[string]interface{})["containers"].([]interface{})
+	}
+
+	return objType, objName, objNamespace, containers, manifestMap, nil
 
 }
 

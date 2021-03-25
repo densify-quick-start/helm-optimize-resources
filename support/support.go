@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/magiconair/properties"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 //Config holds the configMap from the data forwarder
@@ -226,6 +227,50 @@ func InSlice(slice []string, val string) (int, bool) {
 		}
 	}
 	return -1, false
+}
+
+func InMap(inputMap map[string]interface{}, keys []string) bool {
+
+	for _, key := range keys {
+
+		if _, ok := inputMap[key]; !ok {
+			return false
+		}
+
+	}
+
+	return true
+
+}
+
+func CheckMap(inputMap map[string]interface{}, list ...string) string {
+
+	if len(list) > 0 {
+
+		if _, ok := inputMap[list[0]]; ok {
+
+			if len(list) > 1 {
+				return CheckMap(inputMap[list[0]].(map[string]interface{}), list[1:]...)
+			} else {
+				return inputMap[list[0]].(string)
+			}
+
+		} else {
+			return ""
+		}
+
+	}
+
+	return ""
+
+}
+
+func PrintCharAcrossScreen(char string) {
+	if width, _, err := terminal.GetSize(0); err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println(strings.Repeat(char, width))
+	}
 }
 
 //WriteToTempFile writes the contents of the string to a temp file

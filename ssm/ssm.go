@@ -254,8 +254,9 @@ func getParameterLabel(ssmKey string, version string) (string, error) {
 		if strconv.FormatFloat(val["Version"].(float64), 'E', -1, 64) == version && len(val["Labels"].([]interface{})) == 1 {
 			if val["Labels"].([]interface{})[0].(string) == "NotApproved" {
 				return "Not Approved", nil
+			} else if val["Labels"].([]interface{})[0].(string) == "Approved" {
+				return "Approved", nil
 			}
-			return val["Labels"].([]interface{})[0].(string), nil
 		}
 	}
 
