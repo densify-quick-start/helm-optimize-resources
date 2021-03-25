@@ -1,5 +1,5 @@
 name: "optimize"
-version: "2.3.5"
+version: "2.3.4"
 usage: "optimize performance of a release"
 description: |-
   Inject Densify insights (if available) into the resource specificiations of your running containers 
