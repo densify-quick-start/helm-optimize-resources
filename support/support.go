@@ -267,7 +267,7 @@ func CheckMap(inputMap map[string]interface{}, list ...string) string {
 
 func PrintCharAcrossScreen(char string) {
 	if width, _, err := terminal.GetSize(0); err != nil {
-		fmt.Println(err)
+		fmt.Println(strings.Repeat(char, 100))
 	} else {
 		fmt.Println(strings.Repeat(char, width))
 	}
