@@ -3,7 +3,7 @@
 [![Watch the video](https://image.ibb.co/i4rBSR/1920x1080_125pct_laptop.png)](https://asciinema.org/a/Rxbp7rQpwEhGZ0G9Hx8HrFzNx)
 
 ### Introduction
-This is a helmV3 plugin to optimize your container resources (CPU/Memory Requests/Limits) by injecting optimal specifications, extracted from an external parameter repository whenever helm is called to install or upgrade a chart.  AWS Parameter Store is currently supported.
+This is a helmV3 plugin to optimize your container resources (CPU/Memory Requests/Limits) by injecting optimal specifications, extracted from an external parameter repository whenever helm is called to install or upgrade a chart.
 
 When the plugin is utilized, the following operations are completed **in the specified order as needed** on each container within your helm application stack.  
 1) Implement optimal specifications found in the parameter repository.
