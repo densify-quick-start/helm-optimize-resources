@@ -1,5 +1,7 @@
 # Helm Optimize Resource Plugin
 
+[![Watch the video](https://image.ibb.co/i4rBSR/1920x1080_125pct_laptop.png)](https://asciinema.org/a/Rxbp7rQpwEhGZ0G9Hx8HrFzNx)
+
 ### Introduction
 This is a helmV3 plugin to optimize your container resources (CPU/Memory Requests/Limits) by injecting optimal specifications, extracted from an external parameter repository whenever helm is called to install or upgrade a chart.  AWS Parameter Store is currently supported.
 
@@ -102,9 +104,6 @@ helm optimize [HELM COMMAND]
 Eg. helm optimize (install/upgrade) chart chart_dir/ --values value-file1.yaml -f value-file2.yaml
 ```
 Again, the "HELM COMMAND" is nothing more than your normal helm install or upgrade command.
-
-### Example
-[![Watch the video](https://image.ibb.co/i4rBSR/1920x1080_125pct_laptop.png)](https://asciinema.org/a/Rxbp7rQpwEhGZ0G9Hx8HrFzNx)
 
 ## License
 helm-optimize-resources is available under the MIT license. See the LICENSE file for more info.
