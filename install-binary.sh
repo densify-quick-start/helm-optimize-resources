@@ -4,7 +4,7 @@
 # Combination of the Glide and Helm scripts, with my own tweaks.
 
 PROJECT_NAME="helm-optimize-resources"
-PROJECT_GH="densify-quick-start/$PROJECT_NAME"
+PROJECT_GH="quick-start-tools/$PROJECT_NAME"
 eval $(helm env)
 
 if [[ $SKIP_BIN_INSTALL == "1" ]]; then
