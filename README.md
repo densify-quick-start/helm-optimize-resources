@@ -24,7 +24,7 @@ When the plugin is utilized, the following operations are completed **in the spe
 ## Installation
 Simply run the below command to install the plugin.
 ```sh
-$ helm plugin install https://github.com/densify-quick-start/helm-optimize-resources
+$ helm plugin install https://github.com/quick-start-tools/helm-optimize-resources
 ```
 If your running this command from Windows command prompt, you will likely run into the following error.  To complete the install, navigate to the plugin directory ($HELM_PLUGINS\helm-optimize-resources) and execute install-binary.sh manually.  You can find your $HELM_PLUGINS directory by issuing the 'helm env' command.
 ```
